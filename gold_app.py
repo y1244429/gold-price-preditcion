@@ -11,7 +11,17 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 import requests
 import json
 import warnings
+import time
 warnings.filterwarnings('ignore')
+
+# 导入 Serper 数据源（yfinance限流时的备用）
+try:
+    from serper_data_source import get_gold_data_serper
+    SERPER_AVAILABLE = True
+    print("✅ Serper 数据源已加载")
+except ImportError:
+    SERPER_AVAILABLE = False
+    print("⚠️ Serper 数据源未加载")
 
 # 导入TensorFlow LSTM模型
 # 注意：可通过设置 LSTM_ENABLED = True 来启用LSTM
@@ -239,7 +249,18 @@ def get_yahoo_gold_data():
         print(f"成功获取Yahoo Finance黄金数据: {len(df)} 条")
         return calculate_indicators(df)
     except Exception as e:
-        print(f"Yahoo Finance数据获取失败: {e}")
+        error_msg = str(e)
+        print(f"Yahoo Finance数据获取失败: {error_msg}")
+        
+        # 检测限流错误
+        if "Too Many Requests" in error_msg or "Rate limited" in error_msg:
+            print("⚠️ 检测到 Yahoo Finance 限流")
+            
+            # 尝试使用 Serper API
+            if SERPER_AVAILABLE:
+                print("🔄 自动切换到 Serper API...")
+                return None  # 返回None让上层调用Serper
+        
         return None
 
 def calculate_indicators(df):
@@ -318,7 +339,7 @@ def generate_mock_data():
     return calculate_indicators(df)
 
 def get_real_gold_data():
-    """获取黄金数据，优先级：上海期货交易所 > Yahoo Finance > 模拟数据"""
+    """获取黄金数据，优先级：上海期货交易所 > Yahoo Finance > Serper API > 模拟数据"""
     global data_fetch_cache
     
     # 检查数据获取缓存（30分钟内不重复获取）
@@ -345,7 +366,22 @@ def get_real_gold_data():
         data_fetch_cache['timestamp'] = datetime.now()
         return df
     
-    # 3. 使用模拟数据
+    # 3. 如果Yahoo限流，尝试 Serper API
+    if SERPER_AVAILABLE:
+        print("🔄 Yahoo限流，尝试 Serper API...")
+        try:
+            df = get_gold_data_serper()
+            if df is not None and not df.empty:
+                print("✅ 成功获取 Serper API 数据")
+                # 计算技术指标
+                df = calculate_indicators(df)
+                data_fetch_cache['df'] = df
+                data_fetch_cache['timestamp'] = datetime.now()
+                return df
+        except Exception as e:
+            print(f"⚠️ Serper API 获取失败: {e}")
+    
+    # 4. 使用模拟数据
     print("⚠️ 使用模拟数据")
     df = generate_mock_data()
     data_fetch_cache['df'] = df
