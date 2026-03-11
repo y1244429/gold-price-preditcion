@@ -162,8 +162,103 @@
             font-weight: bold;
             border-radius: 25px;
             cursor: pointer;
-            margin: 20px auto;
-            display: block;
+            margin: 10px auto;
+            display: inline-block;
+        }
+        .btn-secondary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            margin-left: 10px;
+        }
+        .btn-small {
+            padding: 8px 20px;
+            font-size: 14px;
+        }
+        .btn-reset {
+            background: linear-gradient(135deg, #6c757d, #495057);
+            color: #fff;
+        }
+        
+        /* 权重调整面板 */
+        .weight-panel {
+            background: rgba(255,255,255,0.05);
+            border: 2px solid rgba(255,215,0,0.3);
+            border-radius: 20px;
+            padding: 25px;
+            margin: 20px 0;
+        }
+        .weight-sliders {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .weight-item {
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 12px;
+        }
+        .weight-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .weight-item-name {
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .weight-item-value {
+            background: rgba(255,215,0,0.2);
+            color: #FFD700;
+            padding: 4px 12px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: bold;
+            min-width: 50px;
+            text-align: center;
+        }
+        .weight-slider {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.1);
+            outline: none;
+            -webkit-appearance: none;
+        }
+        .weight-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #FFD700;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(255,215,0,0.5);
+        }
+        .weight-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #FFD700;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 0 10px rgba(255,215,0,0.5);
+        }
+        .weight-actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .weight-total {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 16px;
+            color: #FFD700;
+        }
+        .weight-total.warning {
+            color: #ff4757;
         }
         
         .loading {
@@ -202,6 +297,20 @@
         </header>
 
         <button class="btn" onclick="loadData()">📊 获取宏观因子数据</button>
+        <button class="btn btn-secondary" onclick="toggleWeightPanel()">⚙️ 调整因子权重</button>
+
+        <!-- 权重调整面板 -->
+        <div id="weightPanel" class="weight-panel hidden">
+            <div class="section-title">⚙️ 自定义因子权重</div>
+            <div class="weight-sliders" id="weightSliders">
+                <!-- 动态生成 -->
+            </div>
+            <div class="weight-actions">
+                <button class="btn btn-small" onclick="applyCustomWeights()">✓ 应用权重</button>
+                <button class="btn btn-small btn-reset" onclick="resetWeights()">↺ 重置默认</button>
+            </div>
+            <div class="weight-total" id="weightTotal">总计: 100%</div>
+        </div>
 
         <div id="loadingSection" class="loading hidden">
             <div class="spinner"></div>
@@ -225,6 +334,9 @@
             <!-- 价格预测 -->
             <div class="prediction-section">
                 <div class="section-title">📈 基于宏观因子的金价预测 (30天)</div>
+                <div style="text-align:center; color:#888; font-size:12px; margin-bottom:15px;">
+                    数据来源: <span id="priceSource">--</span>
+                </div>
                 <div class="price-comparison">
                     <div class="price-box">
                         <div class="price-label">当前金价</div>
@@ -249,22 +361,219 @@
 
     <script>
         let chartInstance = null;
+        let currentData = null;
+        let defaultWeights = {};
+        let customWeights = {};
+        
+        // 默认权重配置
+        const DEFAULT_WEIGHTS = {
+            '实际利率 (TIPS)': 0.30,
+            '地缘政治风险 (GPR)': 0.20,
+            '美元指数 (DXY)': 0.15,
+            '美债收益率': 0.10,
+            '黄金ETF持仓': 0.09,
+            '通胀预期 (CPI)': 0.05,
+            'VIX波动率': 0.05,
+            '金银比/铜金比': 0.05,
+            '经济不确定性 (EPU)': 0.01
+        };
 
         async function loadData() {
             document.getElementById('loadingSection').classList.remove('hidden');
             document.getElementById('contentSection').classList.add('hidden');
             
             try {
-                const response = await fetch('/api/macro-factors');
+                // 动态获取当前主机和端口
+                const baseUrl = window.location.origin;
+                const response = await fetch(`${baseUrl}/api/macro-factors`);
                 const data = await response.json();
                 
+                currentData = data;
+                // 保存从服务器获取的默认权重
+                for (const [name, factor] of Object.entries(data.factors)) {
+                    defaultWeights[name] = factor.weight;
+                }
+                customWeights = {...defaultWeights};
+                
                 updateUI(data);
+                initWeightSliders(data.factors);
                 
                 document.getElementById('loadingSection').classList.add('hidden');
                 document.getElementById('contentSection').classList.remove('hidden');
             } catch (error) {
                 console.error('加载数据失败:', error);
                 alert('数据加载失败，请重试');
+            }
+        }
+        
+        function toggleWeightPanel() {
+            const panel = document.getElementById('weightPanel');
+            panel.classList.toggle('hidden');
+        }
+        
+        function initWeightSliders(factors) {
+            const container = document.getElementById('weightSliders');
+            container.innerHTML = '';
+            
+            // 按权重降序排列
+            const sortedFactors = Object.entries(factors).sort((a, b) => b[1].weight - a[1].weight);
+            
+            for (const [name, factor] of sortedFactors) {
+                const item = document.createElement('div');
+                item.className = 'weight-item';
+                item.innerHTML = `
+                    <div class="weight-item-header">
+                        <span class="weight-item-name">${name}</span>
+                        <span class="weight-item-value" id="weight-value-${name}">${(factor.weight * 100).toFixed(0)}%</span>
+                    </div>
+                    <input type="range" class="weight-slider" min="0" max="50" value="${(factor.weight * 100).toFixed(0)}"
+                           id="weight-slider-${name}" oninput="updateWeight('${name}', this.value)">
+                `;
+                container.appendChild(item);
+            }
+            
+            updateWeightTotal();
+        }
+        
+        function updateWeight(name, value) {
+            customWeights[name] = value / 100;
+            document.getElementById(`weight-value-${name}`).textContent = value + '%';
+            updateWeightTotal();
+        }
+        
+        function updateWeightTotal() {
+            const total = Object.values(customWeights).reduce((sum, w) => sum + w, 0);
+            const totalEl = document.getElementById('weightTotal');
+            totalEl.textContent = `总计: ${(total * 100).toFixed(1)}%`;
+            
+            if (Math.abs(total - 1.0) > 0.01) {
+                totalEl.classList.add('warning');
+                totalEl.textContent += ' (应为100%)';
+            } else {
+                totalEl.classList.remove('warning');
+            }
+        }
+        
+        function applyCustomWeights() {
+            if (!currentData) {
+                alert('请先获取数据');
+                return;
+            }
+            
+            // 检查权重总和
+            const totalWeight = Object.values(customWeights).reduce((sum, w) => sum + w, 0);
+            if (Math.abs(totalWeight - 1.0) > 0.01) {
+                alert(`权重总和必须是100%，当前为 ${(totalWeight * 100).toFixed(1)}%`);
+                return;
+            }
+            
+            // 重新计算加权得分
+            let totalScore = 0;
+            const updatedFactors = {};
+            
+            for (const [name, factor] of Object.entries(currentData.factors)) {
+                const newWeight = customWeights[name] || factor.weight;
+                const newWeightedScore = factor.adjusted_score * newWeight;
+                
+                updatedFactors[name] = {
+                    ...factor,
+                    weight: newWeight,
+                    weighted_score: newWeightedScore
+                };
+                totalScore += newWeightedScore;
+            }
+            
+            // 更新情绪判断
+            let newSentiment, expectedChange;
+            if (totalScore > 6.5) {
+                newSentiment = '强烈看涨';
+                expectedChange = 0.055;
+            } else if (totalScore > 5.5) {
+                newSentiment = '看涨';
+                expectedChange = 0.02;
+            } else if (totalScore > 4.5) {
+                newSentiment = '中性';
+                expectedChange = 0.0;
+            } else if (totalScore > 3.5) {
+                newSentiment = '看跌';
+                expectedChange = -0.02;
+            } else {
+                newSentiment = '强烈看跌';
+                expectedChange = -0.055;
+            }
+            
+            // 基于新的综合得分重新计算预测价格
+            const currentPrice = currentData.prediction.current_price;
+            const dailyDrift = expectedChange / 30;
+            const dailyVolatility = 0.15 / Math.sqrt(252); // 默认15%年化波动率
+            
+            const newPredictions = [];
+            const newDates = [];
+            let currentPred = currentPrice;
+            
+            for (let i = 1; i <= 30; i++) {
+                const date = new Date();
+                date.setDate(date.getDate() + i);
+                newDates.push(date.toISOString().split('T')[0]);
+                
+                // 随机游走: r = drift + volatility * Z
+                const randomShock = (Math.random() - 0.5) * 2 * dailyVolatility;
+                const dailyReturn = dailyDrift + randomShock;
+                currentPred = currentPred * (1 + dailyReturn);
+                newPredictions.push(Math.round(currentPred * 100) / 100);
+            }
+            
+            const targetPrice = Math.round(currentPrice * (1 + expectedChange) * 100) / 100;
+            
+            // 更新预测数据
+            const newPrediction = {
+                ...currentData.prediction,
+                predictions: newPredictions,
+                dates: newDates,
+                sentiment: newSentiment,
+                expected_return: Math.round(expectedChange * 100 * 10) / 10,
+                target_price: targetPrice
+            };
+            
+            // 更新UI
+            const updatedData = {
+                ...currentData,
+                factors: updatedFactors,
+                total_score: totalScore,
+                sentiment: newSentiment,
+                prediction: newPrediction
+            };
+            
+            updateUI(updatedData);
+            
+            // 显示成功提示
+            const panel = document.getElementById('weightPanel');
+            const successMsg = document.createElement('div');
+            successMsg.style.cssText = 'text-align:center; color:#00d084; margin-top:10px; padding:10px; background:rgba(0,208,132,0.1); border-radius:8px;';
+            successMsg.innerHTML = `✓ 权重已应用<br>新综合得分: ${totalScore.toFixed(2)} | 预期收益: ${(expectedChange * 100).toFixed(1)}%`;
+            panel.appendChild(successMsg);
+            
+            setTimeout(() => {
+                successMsg.remove();
+            }, 3000);
+        }
+        
+        function resetWeights() {
+            customWeights = {...defaultWeights};
+            
+            // 重置所有滑块
+            for (const [name, weight] of Object.entries(defaultWeights)) {
+                const slider = document.getElementById(`weight-slider-${name}`);
+                const valueEl = document.getElementById(`weight-value-${name}`);
+                if (slider) slider.value = (weight * 100).toFixed(0);
+                if (valueEl) valueEl.textContent = (weight * 100).toFixed(0) + '%';
+            }
+            
+            updateWeightTotal();
+            
+            // 恢复原始数据
+            if (currentData) {
+                updateUI(currentData);
             }
         }
 
@@ -341,8 +650,17 @@
             
             // 更新预测
             const pred = data.prediction;
-            document.getElementById('currentPrice').textContent = '$' + pred.current_price.toLocaleString();
-            document.getElementById('targetPrice').textContent = '$' + pred.target_price.toLocaleString();
+            document.getElementById('currentPrice').textContent = '¥' + pred.current_price.toLocaleString();
+            document.getElementById('targetPrice').textContent = '¥' + pred.target_price.toLocaleString();
+            
+            // 更新价格来源
+            const priceSourceEl = document.getElementById('priceSource');
+            if (pred.current_price_source && pred.current_price_contract) {
+                priceSourceEl.textContent = `${pred.current_price_source} ${pred.current_price_contract}`;
+                priceSourceEl.style.color = '#FFD700';
+            } else {
+                priceSourceEl.textContent = '上海期货交易所 AU2604';
+            }
             
             const returnEl = document.getElementById('expectedReturn');
             returnEl.textContent = (pred.expected_return > 0 ? '+' : '') + pred.expected_return + '%';
@@ -350,7 +668,7 @@
             
             const minPrice = Math.min(...pred.predictions);
             const maxPrice = Math.max(...pred.predictions);
-            document.getElementById('priceRange').textContent = '$' + minPrice.toFixed(0) + ' - $' + maxPrice.toFixed(0);
+            document.getElementById('priceRange').textContent = '¥' + minPrice.toFixed(0) + ' - ¥' + maxPrice.toFixed(0);
             
             // 绘制图表
             drawChart(pred.dates, pred.predictions, pred.current_price);
@@ -399,7 +717,7 @@
                             ticks: {
                                 color: '#888',
                                 callback: function(value) {
-                                    return '$' + value;
+                                    return '¥' + value;
                                 }
                             }
                         }

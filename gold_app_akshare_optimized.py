@@ -38,14 +38,14 @@ class OptimizedMacroFactorCollector:
     
     def __init__(self):
         self.factors_config = {
-            '美元指数 (DXY)': {'weight': 0.20, 'impact': 'negative'},
-            '实际利率': {'weight': 0.18, 'impact': 'negative'},
-            '通胀预期': {'weight': 0.15, 'impact': 'positive'},
-            '美债收益率': {'weight': 0.12, 'impact': 'negative'},
-            '地缘政治风险': {'weight': 0.10, 'impact': 'positive'},
-            'VIX波动率': {'weight': 0.08, 'impact': 'positive'},
-            '经济不确定性': {'weight': 0.07, 'impact': 'positive'},
-            'ETF持仓': {'weight': 0.05, 'impact': 'positive'},
+            '美元指数 (DXY)': {'weight': 0.15, 'impact': 'negative'},
+            '实际利率': {'weight': 0.30, 'impact': 'negative'},
+            '通胀预期': {'weight': 0.05, 'impact': 'positive'},
+            '美债收益率': {'weight': 0.10, 'impact': 'negative'},
+            '地缘政治风险': {'weight': 0.20, 'impact': 'positive'},
+            'VIX波动率': {'weight': 0.05, 'impact': 'positive'},
+            '经济不确定性': {'weight': 0.01, 'impact': 'positive'},
+            'ETF持仓': {'weight': 0.09, 'impact': 'positive'},
             '金银比/铜金比': {'weight': 0.05, 'impact': 'positive'}
         }
         self.data_quality = {}

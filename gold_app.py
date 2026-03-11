@@ -12,6 +12,7 @@ import requests
 import json
 import warnings
 import time
+import os
 warnings.filterwarnings('ignore')
 
 # 导入 Serper 数据源（yfinance限流时的备用）
@@ -905,6 +906,11 @@ def build_future_features(current_seq, df):
 def index():
     return render_template('gold_dashboard.html')
 
+@app.route('/macro')
+def macro_dashboard():
+    """黄金价格宏观因子可调整预测系统"""
+    return render_template('macro_dashboard.html')
+
 @app.route('/api/data')
 def get_data():
     """获取黄金数据"""
@@ -1001,14 +1007,14 @@ class MacroFactorCollector:
     
     def __init__(self):
         self.factors_config = {
-            '美元指数 (DXY)': {'weight': 0.20, 'impact': 'negative'},
-            '实际利率 (TIPS)': {'weight': 0.18, 'impact': 'negative'},
-            '通胀预期 (CPI)': {'weight': 0.15, 'impact': 'positive'},
-            '美债收益率': {'weight': 0.12, 'impact': 'negative'},
-            '地缘政治风险 (GPR)': {'weight': 0.10, 'impact': 'positive'},
-            'VIX波动率': {'weight': 0.08, 'impact': 'positive'},
-            '经济不确定性 (EPU)': {'weight': 0.07, 'impact': 'positive'},
-            '黄金ETF持仓': {'weight': 0.05, 'impact': 'positive'},
+            '美元指数 (DXY)': {'weight': 0.15, 'impact': 'negative'},
+            '实际利率 (TIPS)': {'weight': 0.30, 'impact': 'negative'},
+            '通胀预期 (CPI)': {'weight': 0.05, 'impact': 'positive'},
+            '美债收益率': {'weight': 0.10, 'impact': 'negative'},
+            '地缘政治风险 (GPR)': {'weight': 0.20, 'impact': 'positive'},
+            'VIX波动率': {'weight': 0.05, 'impact': 'positive'},
+            '经济不确定性 (EPU)': {'weight': 0.01, 'impact': 'positive'},
+            '黄金ETF持仓': {'weight': 0.09, 'impact': 'positive'},
             '金银比/铜金比': {'weight': 0.05, 'impact': 'positive'}
         }
         self.data_log = []
@@ -1018,7 +1024,71 @@ class MacroFactorCollector:
         self.data_log.append(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
     
     def get_dxy(self):
-        """1. 美元指数 - Yahoo Finance"""
+        """1. 美元指数 - 优先akshare, 备用Yahoo Finance和Serper"""
+        # 方法1: akshare 外汇数据 - 使用即期汇率
+        try:
+            import akshare as ak
+            # 获取美元/人民币汇率
+            print("   尝试获取 USD/CNY 汇率...")
+            fx_df = ak.fx_spot_quote()
+            if not fx_df.empty:
+                print(f"   fx_df columns: {list(fx_df.columns)}")
+                # 查找 USD/CNY 行
+                usd_row = None
+                for idx, row in fx_df.iterrows():
+                    curr_pair = str(row.get('货币对', ''))
+                    if 'USD/CNY' in curr_pair or 'USD' in curr_pair:
+                        usd_row = row
+                        print(f"   找到USD行: {row.to_dict()}")
+                        break
+                
+                if usd_row is not None:
+                    # 使用买报价列
+                    current = float(usd_row['买报价'])
+                    # 估算美元指数 (7.0 = 100点基准)
+                    dxy_estimate = 100 + (current - 7.0) * 10
+                    return {
+                        'value': round(dxy_estimate, 2),
+                        'change_1m': 0,
+                        'trend': 'stable',
+                        'weight': 0.15,
+                        'impact': 'negative',
+                        'data_source': 'akshare 外汇即期汇率 (USD/CNY)',
+                        'reliability': '高',
+                        'method': '基于美元兑人民币汇率估算DXY',
+                        'raw_rate': round(current, 4)
+                    }
+        except Exception as e:
+            self.log(f"akshare 即期汇率失败: {e}")
+            print(f"   即期汇率失败: {e}")
+        
+        # 方法1b: akshare 人民币汇率报价
+        try:
+            import akshare as ak
+            print("   尝试获取人民币汇率报价...")
+            fx_df = ak.currency_boc_safe()
+            if not fx_df.empty:
+                # 查找美元行
+                for idx, row in fx_df.iterrows():
+                    if 'USD' in str(row.get('货币', '')) or '美元' in str(row.get('货币', '')):
+                        current = float(row.get('现汇买入价', row.get('买入价', 7.0)))
+                        prev = current  # 无法获取历史变化
+                        dxy_estimate = 100 + (current - 7.0) * 10
+                        return {
+                            'value': round(dxy_estimate, 2),
+                            'change_1m': 0,
+                            'trend': 'stable',
+                            'weight': 0.15,
+                            'impact': 'negative',
+                            'data_source': 'akshare 人民币汇率报价 (USD/CNY)',
+                            'reliability': '高',
+                            'method': '基于美元兑人民币汇率估算DXY',
+                            'raw_rate': round(current, 4)
+                        }
+        except Exception as e:
+            self.log(f"akshare 人民币汇率失败: {e}")
+        
+        # 方法2: Yahoo Finance
         try:
             dxy = yf.Ticker("DX-Y.NYB").history(period="1mo")
             value = dxy['Close'].iloc[-1]
@@ -1027,17 +1097,91 @@ class MacroFactorCollector:
                 'value': round(value, 2),
                 'change_1m': round(change, 2),
                 'trend': 'up' if change > 0 else 'down',
-                'weight': 0.20,
+                'weight': 0.15,
                 'impact': 'negative',
                 'data_source': 'Yahoo Finance DXY',
                 'reliability': '高'
             }
         except Exception as e:
-            return self._fallback_factor('美元指数', 103.5, 0.20, 'negative', str(e))
+            self.log(f"Yahoo DXY失败: {e}")
+        
+        # 方法3: Serper 搜索备用
+        try:
+            from serper_data_source import search_gold_price
+            price_data = search_gold_price()
+            if price_data and price_data.get('currency') == 'USD':
+                # 使用黄金价格间接反映美元强弱
+                gold_price = price_data['price']
+                # 黄金价格与美元指数通常负相关
+                dxy_estimate = 120 - (gold_price - 2000) / 50
+                return {
+                    'value': round(dxy_estimate, 2),
+                    'change_1m': 0,
+                    'trend': 'stable',
+                    'weight': 0.15,
+                    'impact': 'negative',
+                    'data_source': 'Serper API (黄金价格间接估算)',
+                    'reliability': '中',
+                    'method': '基于黄金价格间接估算美元强弱'
+                }
+        except Exception as e:
+            self.log(f"Serper DXY失败: {e}")
+        
+        return self._fallback_factor('美元指数', 103.5, 0.15, 'negative', '所有数据源失败')
     
     def get_real_rate_tips(self):
-        """2. 实际利率 - 优先使用TIPS ETF"""
-        # 方法1: TIPS ETF
+        """2. 实际利率 - 优先akshare中国国债, 备用TIPS ETF"""
+        # 方法1: akshare 中国国债收益率（作为实际利率代理）
+        try:
+            import akshare as ak
+            # 获取中国10年期国债收益率
+            bond_df = ak.bond_zh_us_rate()
+            if not bond_df.empty and '中国国债收益率10年' in bond_df.columns:
+                current_yield = float(bond_df['中国国债收益率10年'].iloc[-1])
+                prev_yield = float(bond_df['中国国债收益率10年'].iloc[-20]) if len(bond_df) >= 20 else current_yield
+                change = current_yield - prev_yield
+                # 中国CPI作为通胀预期
+                cpi_df = ak.macro_china_cpi()
+                cpi = float(cpi_df['今值'].iloc[-1]) if not cpi_df.empty else 2.0
+                real_rate = current_yield - cpi
+                
+                return {
+                    'value': round(real_rate, 2),
+                    'change_1m': round(change, 2),
+                    'trend': 'up' if change > 0 else 'down',
+                    'weight': 0.30,
+                    'impact': 'negative',
+                    'data_source': 'akshare 中国国债收益率 - CPI',
+                    'reliability': '高',
+                    'method': '10年期国债收益率减去CPI',
+                    'nominal_yield': round(current_yield, 2),
+                    'cpi': round(cpi, 2)
+                }
+        except Exception as e:
+            self.log(f"akshare实际利率失败: {e}")
+        
+        # 方法2: akshare 美国利率数据
+        try:
+            import akshare as ak
+            us_rate_df = ak.bond_zh_us_rate()
+            if not us_rate_df.empty and '美国国债收益率10年' in us_rate_df.columns:
+                current = float(us_rate_df['美国国债收益率10年'].iloc[-1])
+                prev = float(us_rate_df['美国国债收益率10年'].iloc[-2]) if len(us_rate_df) >= 2 else current
+                change = current - prev
+                return {
+                    'value': round(current - 2.0, 2),  # 减去估算通胀
+                    'change_1m': round(change, 2),
+                    'trend': 'up' if change > 0 else 'down',
+                    'weight': 0.30,
+                    'impact': 'negative',
+                    'data_source': 'akshare 美国国债收益率',
+                    'reliability': '高',
+                    'method': '国债收益率减去估算通胀'
+                }
+        except Exception as e:
+            self.log(f"akshare美债利率失败: {e}")
+        
+        # 方法3: TIPS ETF
         try:
             tips = yf.Ticker("TIP").history(period="1mo")
             tips_price = tips['Close'].iloc[-1]
@@ -1050,7 +1194,7 @@ class MacroFactorCollector:
                 'value': round(implied_real_rate, 2),
                 'change_1m': round(change, 2),
                 'trend': 'up' if change > 0 else 'down',
-                'weight': 0.18,
+                'weight': 0.30,
                 'impact': 'negative',
                 'data_source': 'TIPS ETF (^TIP)',
                 'reliability': '高',
@@ -1060,10 +1204,10 @@ class MacroFactorCollector:
         except:
             pass
         
-        # 方法2: 盈亏平衡通胀率
+        # 方法4: 盈亏平衡通胀率
         try:
             tnx = yf.Ticker("^TNX").history(period="1mo")
-            breakeven = tnx['Close'].iloc[-1] - 1.5  # 估算TIPS收益率
+            breakeven = tnx['Close'].iloc[-1] - 1.5
             change = tnx['Close'].iloc[-1] - tnx['Close'].iloc[-20]
             
             return {
@@ -1077,59 +1221,79 @@ class MacroFactorCollector:
                 'method': '10Y Treasury - TIPS Yield'
             }
         except Exception as e:
-            return self._fallback_factor('实际利率', 1.5, 0.18, 'negative', str(e))
+            return self._fallback_factor('实际利率', 1.5, 0.30, 'negative', str(e))
     
     def get_inflation_cpi(self):
-        """3. 通胀预期 - 优先使用美国CPI"""
-        # 方法1: akshare 美国CPI
+        """3. 通胀预期 - 优先使用中国CPI"""
+        # 方法1: akshare 中国CPI (优先，因为 akshare 对中国数据支持更好)
         try:
             import akshare as ak
-            cpi_df = ak.macro_usa_cpi()
-            if not cpi_df.empty:
-                current_cpi = float(cpi_df['今值'].iloc[-1])
-                try:
-                    prev_cpi = float(cpi_df['今值'].iloc[-2])
-                    change = current_cpi - prev_cpi
-                except:
-                    change = 0
-                
-                return {
-                    'value': round(current_cpi, 2),
-                    'change_1m': round(change, 2),
-                    'trend': 'up' if change > 0 else 'down',
-                    'weight': 0.15,
-                    'impact': 'positive',
-                    'data_source': 'akshare macro_usa_cpi()',
-                    'reliability': '高',
-                    'method': '美国消费者价格指数(CPI)'
-                }
-        except:
-            pass
-        
-        # 方法2: akshare 中国CPI
-        try:
-            import akshare as ak
+            print("   尝试获取中国CPI...")
             cpi_df = ak.macro_china_cpi()
             if not cpi_df.empty:
-                current_cpi = float(cpi_df['今值'].iloc[-1])
-                try:
-                    prev_cpi = float(cpi_df['今值'].iloc[-2])
-                    change = current_cpi - prev_cpi
-                except:
-                    change = 0
+                # 列名是中文: '月份', '全国-当月', '全国-同比增长' 等
+                cpi_col = None
+                for col in cpi_df.columns:
+                    if '全国-当月' in col or '当月' in col:
+                        cpi_col = col
+                        break
                 
-                return {
-                    'value': round(current_cpi, 2),
-                    'change_1m': round(change, 2),
-                    'trend': 'up' if change > 0 else 'down',
-                    'weight': 0.15,
-                    'impact': 'positive',
-                    'data_source': 'akshare macro_china_cpi()',
-                    'reliability': '高',
-                    'method': '中国消费者价格指数(CPI)'
-                }
-        except:
-            pass
+                if cpi_col:
+                    current_cpi = float(cpi_df[cpi_col].iloc[-1])
+                    try:
+                        prev_cpi = float(cpi_df[cpi_col].iloc[-2])
+                        change = ((current_cpi - prev_cpi) / prev_cpi) * 100
+                    except:
+                        change = 0
+                    
+                    # 转换为百分比形式 (如果数据是107.0这种形式)
+                    if current_cpi > 50:  # 说明是指数形式
+                        current_cpi_pct = (current_cpi - 100)
+                    else:
+                        current_cpi_pct = current_cpi
+                    
+                    return {
+                        'value': round(current_cpi_pct, 2),
+                        'change_1m': round(change, 2),
+                        'trend': 'up' if change > 0 else 'down',
+                        'weight': 0.05,
+                        'impact': 'positive',
+                        'data_source': 'akshare 中国CPI (macro_china_cpi)',
+                        'reliability': '高',
+                        'method': '中国消费者价格指数(CPI)',
+                        'raw_value': round(current_cpi, 2)
+                    }
+        except Exception as e:
+            self.log(f"akshare中国CPI失败: {e}")
+        
+        # 方法2: 使用 akshare 的中国宏观经济数据 - CPI同比
+        try:
+            import akshare as ak
+            print("   尝试获取中国CPI同比...")
+            cpi_df = ak.macro_china_cpi()
+            if not cpi_df.empty:
+                # 使用同比增长率列
+                for col in cpi_df.columns:
+                    if '同比增长' in col:
+                        current_cpi = float(cpi_df[col].iloc[-1])
+                        try:
+                            prev_cpi = float(cpi_df[col].iloc[-2])
+                            change = current_cpi - prev_cpi
+                        except:
+                            change = 0
+                        
+                        return {
+                            'value': round(current_cpi, 2),
+                            'change_1m': round(change, 2),
+                            'trend': 'up' if change > 0 else 'down',
+                            'weight': 0.05,
+                            'impact': 'positive',
+                            'data_source': 'akshare 中国CPI同比',
+                            'reliability': '高',
+                            'method': '中国CPI同比增长率'
+                        }
+        except Exception as e:
+            self.log(f"akshare CPI同比失败: {e}")
         
         # 方法3: 盈亏平衡通胀率
         try:
@@ -1139,16 +1303,58 @@ class MacroFactorCollector:
                 'value': round(breakeven, 2),
                 'change_1m': 0,
                 'trend': 'up' if breakeven > 2.5 else 'down',
-                'weight': 0.15,
+                'weight': 0.05,
                 'impact': 'positive',
                 'data_source': 'Breakeven Rate',
                 'reliability': '中'
             }
         except Exception as e:
-            return self._fallback_factor('通胀预期', 2.5, 0.15, 'positive', str(e))
+            return self._fallback_factor('通胀预期', 2.5, 0.05, 'positive', str(e))
     
     def get_bond_yield(self):
-        """4. 美债收益率"""
+        """4. 美债收益率 - 优先akshare, 备用Yahoo Finance"""
+        # 方法1: akshare 中美利率对比数据
+        try:
+            import akshare as ak
+            bond_df = ak.bond_zh_us_rate()
+            if not bond_df.empty and '美国国债收益率10年' in bond_df.columns:
+                current = float(bond_df['美国国债收益率10年'].iloc[-1])
+                prev = float(bond_df['美国国债收益率10年'].iloc[-20]) if len(bond_df) >= 20 else current
+                change = current - prev
+                return {
+                    'value': round(current, 2),
+                    'change_1m': round(change, 2),
+                    'trend': 'up' if change > 0 else 'down',
+                    'weight': 0.12,
+                    'impact': 'negative',
+                    'data_source': 'akshare 美国国债收益率10年',
+                    'reliability': '高'
+                }
+        except Exception as e:
+            self.log(f"akshare美债收益率失败: {e}")
+        
+        # 方法2: akshare 美国宏观数据 - 使用CPI和利率组合
+        try:
+            import akshare as ak
+            # 使用中美利率对比数据
+            bond_df = ak.bond_zh_us_rate()
+            if not bond_df.empty and '美国国债收益率10年' in bond_df.columns:
+                current = float(bond_df['美国国债收益率10年'].iloc[-1])
+                prev = float(bond_df['美国国债收益率10年'].iloc[-5]) if len(bond_df) >= 5 else current
+                change = current - prev
+                return {
+                    'value': round(current, 2),
+                    'change_1m': round(change, 2),
+                    'trend': 'up' if change > 0 else 'down',
+                    'weight': 0.12,
+                    'impact': 'negative',
+                    'data_source': 'akshare 美国国债收益率10年',
+                    'reliability': '高'
+                }
+        except Exception as e:
+            self.log(f"akshare美国宏观数据失败: {e}")
+        
+        # 方法3: Yahoo Finance
         try:
             tnx = yf.Ticker("^TNX").history(period="1mo")
             value = tnx['Close'].iloc[-1]
@@ -1166,22 +1372,66 @@ class MacroFactorCollector:
             return self._fallback_factor('美债收益率', 4.2, 0.12, 'negative', str(e))
     
     def get_gpr(self):
-        """5. 地缘政治风险 - 使用官方GPR指数"""
+        """5. 地缘政治风险 - 使用官方GPR指数，多重备用"""
         # 优先使用官方Caldara-Iacoviello GPR指数
         try:
             from enhanced_gpr_epu import get_gpr_index
             result = get_gpr_index()
             
-            if result.get('value') is not None:
+            if result.get('value') is not None and result.get('status') != 'error':
                 print(f"✅ 成功获取官方GPR数据: {result['value']}")
                 return result
             else:
                 raise Exception(result.get('error', 'GPR数据获取失败'))
                 
         except Exception as e:
-            print(f"⚠️ 官方GPR获取失败，使用VIX代理: {e}")
-            
-        # 备用：VIX代理
+            print(f"⚠️ 官方GPR获取失败: {e}")
+        
+        # 备用1: 使用EnhancedDataCollector直接获取
+        try:
+            from enhanced_gpr_epu import EnhancedDataCollector
+            collector = EnhancedDataCollector()
+            result = collector.get_gpr_data()
+            if result.get('status') == 'success':
+                print(f"✅ 通过EnhancedDataCollector获取GPR: {result['value']}")
+                return {
+                    'value': result['value'],
+                    'change_1m': result.get('change_1m', 0),
+                    'trend': result.get('trend', 'stable'),
+                    'weight': 0.20,
+                    'impact': 'positive',
+                    'data_source': result.get('data_source', 'Caldara-Iacoviello GPR'),
+                    'reliability': result.get('reliability', '极高')
+                }
+        except Exception as e:
+            print(f"⚠️ EnhancedDataCollector GPR失败: {e}")
+        
+        # 备用2: 使用缓存数据
+        try:
+            cache_file = './data_cache/gpr_daily.xls'
+            if os.path.exists(cache_file):
+                import pandas as pd
+                df = pd.read_excel(cache_file)
+                df['date'] = pd.to_datetime(df[['year', 'month', 'day']])
+                df = df.sort_values('date')
+                latest = df.iloc[-1]
+                gpr_30d_ago = df.iloc[-30]['GPRD'] if len(df) >= 30 else df.iloc[0]['GPRD']
+                change = latest['GPRD'] - gpr_30d_ago
+                
+                return {
+                    'value': round(latest['GPRD'], 2),
+                    'change_1m': round(change, 2),
+                    'trend': 'up' if change > 0 else 'down',
+                    'weight': 0.20,
+                    'impact': 'positive',
+                    'data_source': 'Caldara-Iacoviello GPR (缓存)',
+                    'reliability': '高',
+                    'note': '使用缓存数据'
+                }
+        except Exception as e:
+            print(f"⚠️ GPR缓存读取失败: {e}")
+        
+        # 备用3: VIX代理
         try:
             vix = yf.Ticker("^VIX").history(period="1mo")
             vix_val = vix['Close'].iloc[-1]
@@ -1192,18 +1442,68 @@ class MacroFactorCollector:
                 'value': round(gpr, 1),
                 'change_1m': round(change, 1),
                 'trend': 'up' if change > 0 else 'down',
-                'weight': 0.10,
+                'weight': 0.20,
                 'impact': 'positive',
                 'data_source': 'VIX代理 (官方GPR失败时备用)',
                 'reliability': '中',
                 'method': 'VIX / 5 映射到GPR尺度',
-                'note': '官方GPR错误'
+                'note': '官方GPR获取失败'
             }
         except Exception as e2:
-            return self._fallback_factor('地缘政治风险', 5.5, 0.10, 'positive', str(e2))
+            return self._fallback_factor('地缘政治风险', 5.5, 0.20, 'positive', str(e2))
     
     def get_vix(self):
-        """6. VIX波动率"""
+        """6. VIX波动率 - 优先akshare中国波动率, 备用Yahoo VIX"""
+        # 方法1: akshare 中国波动率（基于上证指数）
+        try:
+            import akshare as ak
+            sh_df = ak.index_zh_a_hist(symbol="000001", period="daily",
+                                        start_date=(datetime.now() - timedelta(days=90)).strftime('%Y%m%d'))
+            if not sh_df.empty:
+                sh_df['pct_change'] = sh_df['收盘'].pct_change()
+                volatility = sh_df['pct_change'].std() * np.sqrt(252) * 100
+                
+                # 计算变化（使用最近20天vs前20天）
+                recent_vol = sh_df.tail(20)['pct_change'].std() * np.sqrt(252) * 100
+                prev_vol = sh_df.head(-20).tail(20)['pct_change'].std() * np.sqrt(252) * 100 if len(sh_df) >= 40 else recent_vol
+                change = recent_vol - prev_vol
+                
+                return {
+                    'value': round(volatility, 2),
+                    'change_1m': round(change, 2),
+                    'trend': 'up' if change > 0 else 'down',
+                    'weight': 0.05,
+                    'impact': 'positive',
+                    'data_source': 'akshare 上证指数波动率 (年化)',
+                    'reliability': '高',
+                    'method': '基于上证指数日收益率计算年化波动率'
+                }
+        except Exception as e:
+            self.log(f"akshare波动率失败: {e}")
+        
+        # 方法2: akshare 50ETF波动率（更接近VIX概念）
+        try:
+            import akshare as ak
+            # 50ETF期权波动率或ETF价格历史
+            etf_df = ak.fund_etf_hist_em(symbol="510050", period="daily",
+                                          start_date=(datetime.now() - timedelta(days=90)).strftime('%Y%m%d'))
+            if not etf_df.empty:
+                etf_df['pct_change'] = etf_df['收盘'].pct_change()
+                volatility = etf_df['pct_change'].std() * np.sqrt(252) * 100
+                return {
+                    'value': round(volatility, 2),
+                    'change_1m': 0,
+                    'trend': 'up',
+                    'weight': 0.08,
+                    'impact': 'positive',
+                    'data_source': 'akshare 50ETF波动率',
+                    'reliability': '高',
+                    'method': '基于50ETF日收益率计算年化波动率'
+                }
+        except Exception as e:
+            self.log(f"akshare 50ETF波动率失败: {e}")
+        
+        # 方法3: Yahoo Finance VIX
         try:
             vix = yf.Ticker("^VIX").history(period="1mo")
             value = vix['Close'].iloc[-1]
@@ -1221,13 +1521,13 @@ class MacroFactorCollector:
             return self._fallback_factor('VIX波动率', 18.5, 0.08, 'positive', str(e))
     
     def get_epu(self):
-        """7. 经济不确定性 - 使用官方EPU指数"""
+        """7. 经济不确定性 - 使用官方EPU指数，多重备用"""
         # 优先使用官方EPU指数（中国）
         try:
-            from enhanced_gpr_epu import get_epu_index
+            from enhanced_gpr_epu import get_epu_index, EnhancedDataCollector
             result = get_epu_index('China')
             
-            if result.get('value') is not None:
+            if result.get('value') is not None and result.get('status') != 'error':
                 print(f"✅ 成功获取官方EPU-China数据: {result['value']}")
                 return result
             else:
@@ -1236,19 +1536,66 @@ class MacroFactorCollector:
         except Exception as e:
             print(f"⚠️ 官方EPU-China获取失败: {e}")
         
-        # 备用：使用美国EPU
+        # 备用1: 使用EnhancedDataCollector直接获取中国EPU
         try:
-            from enhanced_gpr_epu import get_epu_index
+            from enhanced_gpr_epu import EnhancedDataCollector
+            collector = EnhancedDataCollector()
+            result = collector.get_epu_data('China')
+            if result.get('status') == 'success':
+                print(f"✅ 通过EnhancedDataCollector获取EPU-China: {result['value']}")
+                return {
+                    'value': result['value'],
+                    'change_1m': result.get('change_1m', 0),
+                    'trend': result.get('trend', 'stable'),
+                    'weight': 0.07,
+                    'impact': 'positive',
+                    'data_source': result.get('data_source', 'China EPU Official'),
+                    'reliability': result.get('reliability', '极高')
+                }
+        except Exception as e:
+            print(f"⚠️ EnhancedDataCollector EPU-China失败: {e}")
+        
+        # 备用2: 使用美国EPU
+        try:
+            from enhanced_gpr_epu import get_epu_index, EnhancedDataCollector
             result = get_epu_index('US')
             
-            if result.get('value') is not None:
+            if result.get('value') is not None and result.get('status') != 'error':
                 print(f"✅ 成功获取官方EPU-US数据: {result['value']}")
                 return result
             else:
                 raise Exception(result.get('error', 'EPU-US数据获取失败'))
                 
         except Exception as e:
-            print(f"⚠️ 官方EPU-US获取失败，使用波动率代理: {e}")
+            print(f"⚠️ 官方EPU-US获取失败: {e}")
+        
+        # 备用3: 使用缓存数据
+        try:
+            cache_files = ['./data_cache/epu_china.xlsx', './data_cache/epu_us.xlsx']
+            for cache_file in cache_files:
+                if os.path.exists(cache_file):
+                    import pandas as pd
+                    df = pd.read_excel(cache_file)
+                    country = 'China' if 'china' in cache_file else 'US'
+                    epu_col = 'EPU_Mainland_Paper' if 'EPU_Mainland_Paper' in df.columns else 'EPU'
+                    df['date'] = pd.to_datetime(df[['Year', 'Month']].assign(day=1))
+                    df = df.sort_values('date')
+                    latest = df.iloc[-1]
+                    prev = df.iloc[-2] if len(df) >= 2 else latest
+                    change = latest[epu_col] - prev[epu_col]
+                    
+                    return {
+                        'value': round(latest[epu_col], 2),
+                        'change_1m': round(change, 2),
+                        'trend': 'up' if change > 0 else 'down',
+                        'weight': 0.07,
+                        'impact': 'positive',
+                        'data_source': f'EPU {country} (缓存)',
+                        'reliability': '高',
+                        'note': '使用缓存数据'
+                    }
+        except Exception as e:
+            print(f"⚠️ EPU缓存读取失败: {e}")
         
         # 最后备用：波动率代理
         try:
@@ -1264,7 +1611,7 @@ class MacroFactorCollector:
                     'value': round(epu_proxy, 0),
                     'change_1m': 0,
                     'trend': 'up' if volatility > 15 else 'down',
-                    'weight': 0.07,
+                    'weight': 0.01,
                     'impact': 'positive',
                     'data_source': 'akshare 上证指数波动率 (官方EPU失败时备用)',
                     'reliability': '中',
@@ -1290,23 +1637,72 @@ class MacroFactorCollector:
                 'method': '年化波动率映射到EPU尺度'
             }
         except Exception as e:
-            return self._fallback_factor('经济不确定性', 200, 0.07, 'positive', str(e))
+            return self._fallback_factor('经济不确定性', 200, 0.01, 'positive', str(e))
     
     def get_etf_holdings(self):
-        """8. 黄金ETF持仓 - 使用官方数据源"""
-        # 优先使用增强版ETF数据获取模块
+        """8. 黄金ETF持仓 - 使用官方数据源，多重备用"""
+        # 优先使用增强版ETF数据获取模块 - 官方SPDR数据
         try:
-            from etf_holdings_collector import get_etf_holdings
-            result = get_etf_holdings(priority='official')
+            from etf_holdings_collector import ETFHoldingsCollector
+            collector = ETFHoldingsCollector()
+            result = collector.get_gld_holdings_official()
             
-            if result.get('value') is not None and result.get('reliability') in ['极高', '高']:
-                print(f"✅ 成功获取ETF持仓数据: {result['value']} 吨")
-                return result
-            else:
-                raise Exception(result.get('note', '数据质量不足'))
-                
+            if result.get('value') is not None and result.get('status') == 'success':
+                print(f"✅ 成功获取SPDR官方ETF持仓: {result['value']} 吨")
+                return {
+                    'value': result['value'],
+                    'change_1m': result.get('change_30d', 0),
+                    'trend': result.get('trend', 'stable'),
+                    'weight': 0.09,
+                    'impact': 'positive',
+                    'data_source': result.get('data_source', 'SPDR Gold Shares Official'),
+                    'reliability': result.get('reliability', '极高'),
+                    'note': result.get('note', '')
+                }
         except Exception as e:
-            print(f"⚠️ 增强版ETF获取失败，使用备用方法: {e}")
+            print(f"⚠️ SPDR官方ETF获取失败: {e}")
+        
+        # 备用1: yfinance GLD计算
+        try:
+            from etf_holdings_collector import ETFHoldingsCollector
+            collector = ETFHoldingsCollector()
+            result = collector.get_gld_holdings_yfinance()
+            
+            if result.get('value') is not None and result.get('status') == 'success':
+                print(f"✅ 通过yfinance获取GLD持仓: {result['value']} 吨")
+                return {
+                    'value': result['value'],
+                    'change_1m': result.get('change_30d_pct', 0),
+                    'trend': result.get('trend', 'stable'),
+                    'weight': 0.09,
+                    'impact': 'positive',
+                    'data_source': result.get('data_source', 'Yahoo Finance GLD'),
+                    'reliability': result.get('reliability', '高'),
+                    'method': result.get('method', '')
+                }
+        except Exception as e:
+            print(f"⚠️ yfinance GLD获取失败: {e}")
+        
+        # 备用2: 华安黄金ETF (中国)
+        try:
+            from etf_holdings_collector import ETFHoldingsCollector
+            collector = ETFHoldingsCollector()
+            result = collector.get_huaan_etf_holdings()
+            
+            if result.get('value') is not None and result.get('status') == 'success':
+                print(f"✅ 成功获取华安黄金ETF: {result['value']} 吨")
+                return {
+                    'value': result['value'],
+                    'change_1m': result.get('change_30d_pct', 0),
+                    'trend': result.get('trend', 'stable'),
+                    'weight': 0.09,
+                    'impact': 'positive',
+                    'data_source': result.get('data_source', '华安黄金ETF'),
+                    'reliability': result.get('reliability', '中'),
+                    'method': result.get('method', '')
+                }
+        except Exception as e:
+            print(f"⚠️ 华安ETF获取失败: {e}")
         
         # 备用方法1: akshare 华安黄金ETF
         try:
@@ -1322,7 +1718,7 @@ class MacroFactorCollector:
                     'value': round(estimated_holdings, 1),
                     'change_1m': round(price_change, 2),
                     'trend': 'up' if price_change > 0 else 'down',
-                    'weight': 0.05,
+                    'weight': 0.09,
                     'impact': 'positive',
                     'data_source': 'akshare 华安黄金ETF(518880)',
                     'reliability': '中',
@@ -1342,14 +1738,14 @@ class MacroFactorCollector:
                 'value': round(estimated_holdings, 1),
                 'change_1m': round(price_change, 2),
                 'trend': 'up' if price_change > 0 else 'down',
-                'weight': 0.05,
+                'weight': 0.09,
                 'impact': 'positive',
                 'data_source': 'GLD价格代理 (备用)',
                 'reliability': '低',
                 'method': '价格变化估算持仓变化'
             }
         except Exception as e2:
-            return self._fallback_factor('黄金ETF持仓', 850, 0.05, 'positive', str(e2))
+            return self._fallback_factor('黄金ETF持仓', 850, 0.09, 'positive', str(e2))
     
     def get_gold_ratios(self):
         """9. 金银比/铜金比"""

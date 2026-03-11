@@ -1,0 +1,64 @@
+✅ 从 MCP 配置加载 Serper API Key
+✅ Serper 数据源已加载
+✅ TensorFlow已加载，版本: 2.16.1
+✅ TensorFlow LSTM模型已加载（已启用）
+✅ Statsmodels ARIMA已加载
+✅ XGBoost已加载
+🧹 清除LSTM旧缓存（数据归一化修复）...
+======================================================================
+📊 黄金价格宏观预测系统
+======================================================================
+
+🥇 当日价格数据源: 上海期货交易所 (SHFE)
+   合约: AU2604 (主力合约)
+   备用: AU2506 / AU2504 / AU2412
+   单位: 元/克 (CNY/g)
+
+📈 宏观因子数据源:
+  ✅ 美元指数 (DXY) - Yahoo Finance
+  ✅ 实际利率 (TIPS) - TIPS ETF
+  ✅ 通胀预期 (CPI) - akshare 美国/中国CPI
+  ✅ 美债收益率 - Yahoo Finance
+  ✅ VIX波动率 - Yahoo Finance
+  ✅ 金银比/铜金比 - akshare 上期所
+  ✅ 地缘政治风险 (GPR) - Caldara-Iacoviello Official
+      网址: https://www.matteoiacoviello.com/gpr.htm
+  ✅ 经济不确定性 (EPU) - policyuncertainty.com Official
+      网址: https://www.policyuncertainty.com/
+  ✅ 黄金ETF持仓 - SPDR Gold Shares Official
+      网址: https://www.spdrgoldshares.com/
+      备用: 华安黄金ETF (518880)
+
+🌐 服务地址:
+  • 主页面: http://127.0.0.1:8080/
+  • 宏观因子API: http://127.0.0.1:8080/api/macro-factors
+  • 带种子重现: http://127.0.0.1:8080/api/macro-factors?seed=42
+  • 数据质量: http://127.0.0.1:8080/api/data-quality
+
+🎲 预测模式: 基于波动率的随机游走
+   - 每次刷新生成不同但统计合理的路径
+   - 添加 ?seed=数字 参数可重现相同结果
+
+📈 模型增强 (极速模式):
+   ✅ 选项A: 标准ARIMA (2,1,2) 简化参数
+   ✅ 选项B: 基于波动率的随机游走
+   ✅ 选项C: 原始特征 (关闭增强以提高速度)
+   ✅ 选项D: XGBoost(50树) + RF(50树) + 加权集成
+
+🧠 LSTM深度学习:
+   - 状态: ❌ 已禁用 (提高加载速度)
+   - 提示: 修改 LSTM_ENABLED = True 启用深度学习
+
+⚡ 速度优化:
+   - ARIMA: (2,1,2) 简化参数
+   - Random Forest: 50棵树 (原100)
+   - XGBoost: 50棵树，深度4 (原100/6)
+   - Gradient Boosting: 30棵树，深度3 (原100/5)
+   - 特征工程: 使用原始特征 (关闭增强)
+======================================================================
+🚀 正在启动服务，端口: 8080...
+======================================================================
+ * Serving Flask app 'gold_app'
+ * Debug mode: on
+Address already in use
+Port 8080 is in use by another program. Either identify and stop that program, or start the server with a different port.

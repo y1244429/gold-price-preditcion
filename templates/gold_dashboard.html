@@ -308,6 +308,7 @@
         <div class="nav-buttons">
             <button class="nav-btn active" onclick="showPage('price')">📈 价格预测</button>
             <button class="nav-btn" onclick="showPage('macro')">🌍 宏观预测</button>
+            <button class="nav-btn" onclick="window.open('/macro', '_blank')">⚙️ 黄金价格宏观因子可调整预测系统</button>
         </div>
 
         <!-- 价格预测页面 -->
@@ -319,7 +320,7 @@
 
             <div id="contentSection" class="hidden">
                 <div class="price-card">
-                    <div class="price-label">当前黄金价格 (USD/盎司)</div>
+                    <div class="price-label">上期所主力合约 AU2604 (RMB/克)</div>
                     <div class="price-value" id="currentPrice">--</div>
                     <div class="price-change" id="priceChange">--</div>
                     <p class="update-time">数据更新时间: <span id="updateTime">--</span></p>
@@ -465,13 +466,22 @@
             document.getElementById('macroContent').classList.add('hidden');
             
             try {
-                const response = await fetch('/api/macro-factors');
+                // 使用动态baseUrl确保端口正确
+                const baseUrl = window.location.origin;
+                const response = await fetch(`${baseUrl}/api/macro-factors`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 const data = await response.json();
                 updateMacroUI(data);
                 document.getElementById('macroLoading').classList.add('hidden');
                 document.getElementById('macroContent').classList.remove('hidden');
             } catch (error) {
                 console.error('加载宏观数据失败:', error);
+                document.getElementById('macroLoading').innerHTML = `
+                    <p style="color:#ff4757;">加载失败: ${error.message}</p>
+                    <p style="color:#888; font-size:12px;">请确保服务已启动</p>
+                `;
             }
         }
 
@@ -482,7 +492,7 @@
             const priceChangePct = data.price_change_pct || 0;
             const updateTime = data.update_time || '未知';
             
-            document.getElementById('currentPrice').textContent = '$' + currentPrice.toLocaleString();
+            document.getElementById('currentPrice').textContent = '¥' + currentPrice.toLocaleString();
             document.getElementById('updateTime').textContent = updateTime;
             
             const changeEl = document.getElementById('priceChange');
@@ -519,7 +529,7 @@
                 card.innerHTML = `
                     <div class="metric-title">${model}</div>
                     <div class="metric-value" style="color: ${colors[model] || '#FFD700'}">${metric.R2.toFixed(4)}</div>
-                    <div class="metric-sub">RMSE: $${metric.RMSE.toFixed(2)}</div>
+                    <div class="metric-sub">RMSE: ¥${metric.RMSE.toFixed(2)}</div>
                 `;
                 metricsSection.appendChild(card);
             }
@@ -543,12 +553,12 @@
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${data.future_dates[i]}</td>
-                    <td style="color: #3b82f6">$${lr.toFixed(2)}</td>
-                    <td style="color: #22c55e">$${rf.toFixed(2)}</td>
-                    <td style="color: #f59e0b">$${arima.toFixed(2)}</td>
-                    <td style="color: #ef4444">${xgb ? '$' + xgb.toFixed(2) : '-'}</td>
-                    <td style="color: #a855f7">${lstm ? '$' + lstm.toFixed(2) : '-'}</td>
-                    <td class="highlight">$${ensemble.toFixed(2)}</td>
+                    <td style="color: #3b82f6">¥${lr.toFixed(2)}</td>
+                    <td style="color: #22c55e">¥${rf.toFixed(2)}</td>
+                    <td style="color: #f59e0b">¥${arima.toFixed(2)}</td>
+                    <td style="color: #ef4444">${xgb ? '¥' + xgb.toFixed(2) : '-'}</td>
+                    <td style="color: #a855f7">${lstm ? '¥' + lstm.toFixed(2) : '-'}</td>
+                    <td class="highlight">¥${ensemble.toFixed(2)}</td>
                 `;
                 tbody.appendChild(row);
             }
@@ -630,8 +640,8 @@
             
             // 更新预测
             const pred = data.prediction;
-            document.getElementById('macroCurrentPrice').textContent = '$' + pred.current_price.toLocaleString();
-            document.getElementById('macroTargetPrice').textContent = '$' + pred.target_price.toLocaleString();
+            document.getElementById('macroCurrentPrice').textContent = '¥' + pred.current_price.toLocaleString();
+            document.getElementById('macroTargetPrice').textContent = '¥' + pred.target_price.toLocaleString();
             
             const returnEl = document.getElementById('macroExpectedReturn');
             returnEl.textContent = (pred.expected_return > 0 ? '+' : '') + pred.expected_return + '%';
@@ -715,7 +725,7 @@
                         },
                         y: { 
                             grid: { color: 'rgba(255,255,255,0.1)' }, 
-                            ticks: { color: '#888', callback: v => '$' + v }
+                            ticks: { color: '#888', callback: v => '¥' + v }
                         }
                     }
                 }
@@ -756,7 +766,7 @@
                         },
                         y: { 
                             grid: { color: 'rgba(255,255,255,0.1)' }, 
-                            ticks: { color: '#888', callback: v => '$' + v }
+                            ticks: { color: '#888', callback: v => '¥' + v }
                         }
                     }
                 }

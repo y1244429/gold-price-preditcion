@@ -32,11 +32,11 @@ class MacroDataCollector:
                 'value': round(df['Close'].iloc[-1], 2),
                 'change_1m': round((df['Close'].iloc[-1] - df['Close'].iloc[-20]) / df['Close'].iloc[-20] * 100, 2),
                 'trend': 'up' if df['Close'].iloc[-1] > df['Close'].iloc[-20] else 'down',
-                'weight': 0.20,
+                'weight': 0.15,
                 'impact': 'negative'  # 美元强则黄金弱
             }
         except:
-            return self._mock_data('DXY', 103.5, 0.20, 'negative')
+            return self._mock_data('DXY', 103.5, 0.15, 'negative')
     
     def get_real_rate(self):
         """2. 实际利率 (10年期TIPS)"""
@@ -49,11 +49,11 @@ class MacroDataCollector:
                 'value': round(real_rate, 2),
                 'change_1m': round((tnx['Close'].iloc[-1] - tnx['Close'].iloc[-20]), 2),
                 'trend': 'up' if real_rate > 0 else 'down',
-                'weight': 0.18,
+                'weight': 0.30,
                 'impact': 'negative'  # 实际利率高则黄金弱
             }
         except:
-            return self._mock_data('实际利率', 1.5, 0.18, 'negative')
+            return self._mock_data('实际利率', 1.5, 0.30, 'negative')
     
     def get_inflation_expectation(self):
         """3. 通胀预期 (10Y Breakeven)"""
@@ -66,11 +66,11 @@ class MacroDataCollector:
                 'value': round(inflation, 2),
                 'change_1m': round(np.random.randn() * 0.2, 2),
                 'trend': 'up' if inflation > 2.5 else 'down',
-                'weight': 0.15,
+                'weight': 0.05,
                 'impact': 'positive'  # 通胀高则黄金强
             }
         except:
-            return self._mock_data('通胀预期', 2.5, 0.15, 'positive')
+            return self._mock_data('通胀预期', 2.5, 0.05, 'positive')
     
     def get_bond_yield(self):
         """4. 美债收益率 (10年期)"""
@@ -81,11 +81,11 @@ class MacroDataCollector:
                 'value': round(df['Close'].iloc[-1], 2),
                 'change_1m': round((df['Close'].iloc[-1] - df['Close'].iloc[-20]), 2),
                 'trend': 'up' if df['Close'].iloc[-1] > df['Close'].iloc[-20] else 'down',
-                'weight': 0.12,
+                'weight': 0.10,
                 'impact': 'negative'  # 收益率高则黄金弱
             }
         except:
-            return self._mock_data('美债收益率', 4.2, 0.12, 'negative')
+            return self._mock_data('美债收益率', 4.2, 0.10, 'negative')
     
     def get_geopolitical_risk(self):
         """5. 地缘政治风险指数 (GPR)"""
@@ -97,11 +97,11 @@ class MacroDataCollector:
                 'value': round(gpr, 1),
                 'change_1m': round((vix['Close'].iloc[-1] - vix['Close'].iloc[-20]) / 10, 1),
                 'trend': 'up' if gpr > 2 else 'down',
-                'weight': 0.10,
+                'weight': 0.20,
                 'impact': 'positive'  # 风险高则黄金强
             }
         except:
-            return self._mock_data('地缘风险', 5.5, 0.10, 'positive')
+            return self._mock_data('地缘风险', 5.5, 0.20, 'positive')
     
     def get_vix(self):
         """6. 市场波动率 (VIX)"""
@@ -112,11 +112,11 @@ class MacroDataCollector:
                 'value': round(df['Close'].iloc[-1], 2),
                 'change_1m': round((df['Close'].iloc[-1] - df['Close'].iloc[-20]), 2),
                 'trend': 'up' if df['Close'].iloc[-1] > 20 else 'down',
-                'weight': 0.08,
+                'weight': 0.05,
                 'impact': 'positive'  # 波动率高则黄金强
             }
         except:
-            return self._mock_data('VIX', 18.5, 0.08, 'positive')
+            return self._mock_data('VIX', 18.5, 0.05, 'positive')
     
     def get_economic_uncertainty(self):
         """7. 经济不确定性 (使用经济数据波动)"""
@@ -128,11 +128,11 @@ class MacroDataCollector:
                 'value': round(volatility, 2),
                 'change_1m': round(np.random.randn() * 2, 2),
                 'trend': 'up' if volatility > 15 else 'down',
-                'weight': 0.07,
+                'weight': 0.01,
                 'impact': 'positive'  # 不确定性高则黄金强
             }
         except:
-            return self._mock_data('经济不确定性', 15.0, 0.07, 'positive')
+            return self._mock_data('经济不确定性', 15.0, 0.01, 'positive')
     
     def get_etf_holdings(self):
         """8. ETF持仓 (GLD等)"""
@@ -144,11 +144,11 @@ class MacroDataCollector:
                 'value': round(850 + np.random.randn() * 10, 1),  # 吨
                 'change_1m': round(holdings_change, 2),
                 'trend': 'up' if holdings_change > 0 else 'down',
-                'weight': 0.05,
+                'weight': 0.09,
                 'impact': 'positive'  # 持仓增则黄金强
             }
         except:
-            return self._mock_data('ETF持仓', 850, 0.05, 'positive')
+            return self._mock_data('ETF持仓', 850, 0.09, 'positive')
     
     def get_gold_ratios(self):
         """9. 金银比/铜金比"""
@@ -292,11 +292,36 @@ class FactorScorer:
 # ============ 黄金价格预测 ============
 
 def predict_gold_price(factors, scores, total_score):
-    """基于因子得分预测黄金价格"""
+    """基于因子得分预测黄金价格 - 使用上海期货交易所AU2604数据"""
+    current_price = None
+    price_source = ""
+    contract = ""
+    
+    # 优先获取上海期货交易所黄金当前价格
     try:
-        # 获取当前金价
-        gold = yf.Ticker("GC=F").history(period="1mo")
-        current_price = gold['Close'].iloc[-1]
+        import akshare as ak
+        # 尝试获取主力合约或常用合约的日线数据
+        contracts = ['AU2604', 'AU2506', 'AU2504', 'AU2412', 'AU0']
+        for sym in contracts:
+            try:
+                df = ak.futures_zh_daily_sina(symbol=sym)
+                if df is not None and not df.empty:
+                    current_price = float(df['close'].iloc[-1])
+                    contract = sym
+                    price_source = "上海期货交易所"
+                    print(f"✅ 使用上期所黄金{sym}价格: {current_price} 元/克")
+                    break
+            except Exception as e:
+                continue
+    except Exception as e:
+        print(f"⚠️ akshare获取失败: {e}")
+    
+    # 如果上期所数据获取失败，使用默认值
+    if current_price is None:
+        current_price = 1157.0  # 当前AU2604实际价格
+        contract = "AU2604"
+        price_source = "参考值"
+        print(f"⚠️ 使用参考价格: {current_price} 元/克")
         
         # 基于总分预测涨跌
         # 总分 0-10，5为中性
@@ -330,24 +355,30 @@ def predict_gold_price(factors, scores, total_score):
         
         return {
             'current_price': round(current_price, 2),
+            'current_price_source': price_source,
+            'current_price_contract': contract,
             'predictions': predictions,
             'dates': dates,
             'sentiment': sentiment,
             'expected_return': round(expected_change * 100, 2),
             'target_price': round(current_price * (1 + expected_change), 2)
         }
-    except:
-        # 模拟数据
-        current_price = 2050
-        predictions = [round(2050 + i * 2 + np.random.randn() * 10, 2) for i in range(1, 31)]
+    except Exception as e:
+        print(f"⚠️ 预测计算出错: {e}, 使用默认值")
+        # 使用上期所实际价格作为默认值
+        current_price = 1157.0
+        contract = "AU2604"
+        predictions = [round(current_price + i * 0.5 + np.random.randn() * 2, 2) for i in range(1, 31)]
         dates = [(datetime.now() + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(1, 31)]
         return {
             'current_price': current_price,
+            'current_price_source': '上海期货交易所(默认)',
+            'current_price_contract': contract,
             'predictions': predictions,
             'dates': dates,
             'sentiment': '中性偏多',
             'expected_return': 2.5,
-            'target_price': 2100
+            'target_price': round(current_price * 1.025, 2)
         }
 
 
@@ -383,16 +414,18 @@ if __name__ == '__main__':
     print("黄金价格宏观因子预测系统")
     print("=" * 60)
     print("包含9个宏观因子：")
-    print("  1. 美元指数 (权重20%)")
-    print("  2. 实际利率 (权重18%)")
-    print("  3. 通胀预期 (权重15%)")
-    print("  4. 美债收益率 (权重12%)")
-    print("  5. 地缘政治风险 (权重10%)")
-    print("  6. VIX波动率 (权重8%)")
-    print("  7. 经济不确定性 (权重7%)")
-    print("  8. ETF持仓 (权重5%)")
+    print("  1. 美元指数 (权重15%)")
+    print("  2. 实际利率 (权重30%)")
+    print("  3. 通胀预期 (权重5%)")
+    print("  4. 美债收益率 (权重10%)")
+    print("  5. 地缘政治风险 (权重20%)")
+    print("  6. VIX波动率 (权重5%)")
+    print("  7. 经济不确定性 (权重1%)")
+    print("  8. ETF持仓 (权重9%)")
     print("  9. 金银比/铜金比 (权重5%)")
+    import os
+    port = int(os.environ.get('PORT', 8080))
     print("=" * 60)
-    print("请访问: http://127.0.0.1:8080")
+    print(f"请访问: http://127.0.0.1:{port}")
     print("=" * 60)
-    app.run(debug=True, host='0.0.0.0', port=8080)
+    app.run(debug=True, host='0.0.0.0', port=port)

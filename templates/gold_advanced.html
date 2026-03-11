@@ -331,7 +331,7 @@
 
         function updateUI(data) {
             // 更新当前价格
-            document.getElementById('currentPrice').textContent = '$' + data.current_price.toLocaleString();
+            document.getElementById('currentPrice').textContent = '¥' + data.current_price.toLocaleString();
             document.getElementById('updateTime').textContent = data.update_time;
             
             // 更新短期预测
@@ -347,10 +347,10 @@
         function updateShortTerm(short, currentPrice) {
             document.getElementById('shortMethod').textContent = short.method;
             document.getElementById('shortR2').textContent = short.metrics.R2.toFixed(4);
-            document.getElementById('shortRMSE').textContent = '$' + short.metrics.RMSE.toFixed(2);
+            document.getElementById('shortRMSE').textContent = '¥' + short.metrics.RMSE.toFixed(2);
             
             const avg = short.predictions.reduce((a, b) => a + b, 0) / short.predictions.length;
-            document.getElementById('shortAvg').textContent = '$' + avg.toFixed(2);
+            document.getElementById('shortAvg').textContent = '¥' + avg.toFixed(2);
             
             const change = short.predictions[short.predictions.length - 1] - currentPrice;
             const changePct = (change / currentPrice * 100).toFixed(2);
@@ -374,7 +374,7 @@
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${date}</td>
-                    <td style="color: #FFD700; font-weight: bold;">$${price.toFixed(2)}</td>
+                    <td style="color: #FFD700; font-weight: bold;">¥${price.toFixed(2)}</td>
                     <td class="${dayChange >= 0 ? 'trend-up' : 'trend-down'}">${dayChange >= 0 ? '+' : ''}${dayChange.toFixed(2)}</td>
                     <td class="${dayChange >= 0 ? 'trend-up' : 'trend-down'}">${dayChange >= 0 ? '+' : ''}${dayChangePct}%</td>
                 `;
@@ -388,10 +388,10 @@
         function updateMediumTerm(medium, currentPrice) {
             document.getElementById('mediumMethod').textContent = medium.method;
             document.getElementById('mediumR2').textContent = medium.metrics.R2.toFixed(4);
-            document.getElementById('mediumRMSE').textContent = '$' + medium.metrics.RMSE.toFixed(2);
+            document.getElementById('mediumRMSE').textContent = '¥' + medium.metrics.RMSE.toFixed(2);
             
             const avg = medium.predictions.reduce((a, b) => a + b, 0) / medium.predictions.length;
-            document.getElementById('mediumAvg').textContent = '$' + avg.toFixed(2);
+            document.getElementById('mediumAvg').textContent = '¥' + avg.toFixed(2);
             
             const change = medium.predictions[medium.predictions.length - 1] - currentPrice;
             const changePct = (change / currentPrice * 100).toFixed(2);
@@ -427,10 +427,10 @@
         function updateLongTerm(long, currentPrice) {
             document.getElementById('longMethod').textContent = long.method;
             document.getElementById('longR2').textContent = long.metrics.R2.toFixed(4);
-            document.getElementById('longRMSE').textContent = '$' + long.metrics.RMSE.toFixed(2);
+            document.getElementById('longRMSE').textContent = '¥' + long.metrics.RMSE.toFixed(2);
             
             const avg = long.predictions.reduce((a, b) => a + b, 0) / long.predictions.length;
-            document.getElementById('longAvg').textContent = '$' + avg.toFixed(2);
+            document.getElementById('longAvg').textContent = '¥' + avg.toFixed(2);
             
             const change = long.predictions[long.predictions.length - 1] - currentPrice;
             const changePct = (change / currentPrice * 100).toFixed(2);
@@ -503,7 +503,7 @@
                             ticks: {
                                 color: '#888',
                                 callback: function(value) {
-                                    return '$' + value;
+                                    return '¥' + value;
                                 }
                             }
                         }

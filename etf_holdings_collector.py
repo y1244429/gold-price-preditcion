@@ -346,7 +346,7 @@ class ETFHoldingsCollector:
             }
         
         # 添加权重信息（兼容旧接口）
-        result['weight'] = 0.05
+        result['weight'] = 0.09
         result['impact'] = 'positive'
         result['change_1m'] = result.get('change_30d', 0)
         

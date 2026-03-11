@@ -67,8 +67,18 @@ class EnhancedDataCollector:
                 df = pd.read_excel(io.BytesIO(response.content))
             
             # 解析数据
-            # GPR日度数据包含: day, month, year, GPRD (日度指数)
-            df['date'] = pd.to_datetime(df[['year', 'month', 'day']])
+            # GPR日度数据列名可能是 'DAY' (YYYYMMDD格式) 或分开的 year/month/day
+            if 'DAY' in df.columns:
+                # 处理 DAY 列格式 (YYYYMMDD)
+                df['date'] = pd.to_datetime(df['DAY'].astype(str), format='%Y%m%d')
+            elif 'day' in df.columns and 'month' in df.columns and 'year' in df.columns:
+                df['date'] = pd.to_datetime(df[['year', 'month', 'day']])
+            elif 'Day' in df.columns:
+                df['date'] = pd.to_datetime(df['Day'].astype(str), format='%Y%m%d')
+            else:
+                # 尝试第一列作为日期
+                df['date'] = pd.to_datetime(df.iloc[:, 0])
+            
             df = df.sort_values('date')
             
             # 获取最新值
@@ -164,15 +174,54 @@ class EnhancedDataCollector:
                 # 读取数据
                 df = pd.read_excel(io.BytesIO(response.content))
             
-            # 解析数据
-            if country.upper() == 'US':
-                # 美国EPU数据格式: Year, Month, EPU
-                df['date'] = pd.to_datetime(df[['Year', 'Month']].assign(day=1))
-                epu_col = 'EPU'
-            else:
-                # 中国EPU数据格式: Year, Month, EPU_Mainland_Paper
-                df['date'] = pd.to_datetime(df[['Year', 'Month']].assign(day=1))
-                epu_col = 'EPU_Mainland_Paper' if 'EPU_Mainland_Paper' in df.columns else 'EPU'
+            # 解析数据 - 处理列名大小写不一致和跳过元数据行
+            # 找到实际数据开始的行（year/Year列是数值的行）
+            data_start_idx = 0
+            for idx, row in df.iterrows():
+                year_val = row.get('year', row.get('Year', None))
+                if pd.notna(year_val) and str(year_val).isdigit():
+                    data_start_idx = idx
+                    break
+            
+            if data_start_idx > 0:
+                df = df.iloc[data_start_idx:].reset_index(drop=True)
+            
+            # 标准化列名
+            df.columns = [str(col).strip() for col in df.columns]
+            
+            # 找到 Year/year 和 Month/month 列
+            year_col = None
+            month_col = None
+            for col in df.columns:
+                if col.lower() == 'year':
+                    year_col = col
+                if col.lower() == 'month':
+                    month_col = col
+            
+            if year_col and month_col:
+                df[year_col] = pd.to_numeric(df[year_col], errors='coerce')
+                df[month_col] = pd.to_numeric(df[month_col], errors='coerce')
+                df = df.dropna(subset=[year_col, month_col])
+                df['date'] = pd.to_datetime(df[[year_col, month_col]].assign(day=1))
+            
+            # 确定EPU列名 - 处理不同文件的列名差异
+            epu_candidates = ['EPU', 'News_Based_Policy_Uncert_Index', 'CategoricalNewsBasedPolicyIndex', 
+                              'EPU_Mainland_Paper', 'MainlandChinaNewsBasedEPU', 'EPU_Composite']
+            epu_col = None
+            for candidate in epu_candidates:
+                if candidate in df.columns:
+                    epu_col = candidate
+                    break
+            
+            if epu_col is None:
+                # 如果找不到已知列名，尝试找包含EPU的列
+                for col in df.columns:
+                    if 'EPU' in col or 'Policy_Uncert' in col:
+                        epu_col = col
+                        break
+            
+            if epu_col is None:
+                raise ValueError(f"无法找到EPU列，可用列: {list(df.columns)}")
             
             df = df.sort_values('date')
             

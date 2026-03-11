@@ -292,11 +292,11 @@
             
             // 模型性能
             document.getElementById('r2Score').textContent = data.metrics.R2.toFixed(4);
-            document.getElementById('rmseScore').textContent = '$' + data.metrics.RMSE.toFixed(2);
-            document.getElementById('currentPrice').textContent = '$' + data.current_price.toLocaleString();
+            document.getElementById('rmseScore').textContent = '¥' + data.metrics.RMSE.toFixed(2);
+            document.getElementById('currentPrice').textContent = '¥' + data.current_price.toLocaleString();
             
             const avgPred = data.predictions.reduce((a, b) => a + b, 0) / data.predictions.length;
-            document.getElementById('avgPrediction').textContent = '$' + avgPred.toFixed(0);
+            document.getElementById('avgPrediction').textContent = '¥' + avgPred.toFixed(0);
             
             // 特征重要性
             const featureList = document.getElementById('featureList');
@@ -358,7 +358,7 @@
                             ticks: {
                                 color: '#888',
                                 callback: function(value) {
-                                    return '$' + value;
+                                    return '¥' + value;
                                 }
                             }
                         }
