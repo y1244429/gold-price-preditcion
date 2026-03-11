@@ -290,6 +290,69 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         
         .hidden { display: none; }
+        
+        /* 风险管理页面样式 */
+        .risk-dashboard {
+            background: linear-gradient(135deg, rgba(0,208,132,0.1), rgba(0,150,100,0.05));
+            border: 2px solid rgba(0,208,132,0.3);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        .risk-dashboard-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00d084;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .risk-dashboard-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .risk-status-item {
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .risk-status-label {
+            color: #888;
+            font-size: 14px;
+        }
+        .risk-status-value {
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .risk-section {
+            background: rgba(255,255,255,0.03);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        .alert-box {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+        .alert-critical {
+            background: rgba(255,71,87,0.1);
+            border: 1px solid rgba(255,71,87,0.3);
+            color: #ff4757;
+        }
+        .alert-warning {
+            background: rgba(255,193,7,0.1);
+            border: 1px solid rgba(255,193,7,0.3);
+            color: #ffc107;
+        }
+        .alert-success {
+            background: rgba(0,208,132,0.1);
+            border: 1px solid rgba(0,208,132,0.3);
+            color: #00d084;
+        }
     </style>
 </head>
 <body>
@@ -308,7 +371,8 @@
         <div class="nav-buttons">
             <button class="nav-btn active" onclick="showPage('price')">📈 价格预测</button>
             <button class="nav-btn" onclick="showPage('macro')">🌍 宏观预测</button>
-            <button class="nav-btn" onclick="window.open('/macro', '_blank')">⚙️ 黄金价格宏观因子可调整预测系统</button>
+            <button class="nav-btn" onclick="showPage('risk')">🛡️ 风险管理</button>
+            <button class="nav-btn" onclick="window.open('/macro', '_blank')">⚙️ 宏观因子可调整预测系统</button>
         </div>
 
         <!-- 价格预测页面 -->
@@ -406,6 +470,133 @@
                 </div>
             </div>
         </div>
+
+        <!-- 风险管理页面 -->
+        <div id="riskPage" class="hidden">
+            <div id="riskLoading" class="loading">
+                <div class="spinner"></div>
+                <p style="color:#888;">正在运行风险管理分析...</p>
+            </div>
+
+            <div id="riskContent" class="hidden">
+                <!-- 风控仪表盘 -->
+                <div class="risk-dashboard">
+                    <div class="risk-dashboard-title">🛡️ 风控监控仪表盘</div>
+                    <div class="risk-dashboard-content">
+                        <div class="risk-status-item">
+                            <span class="risk-status-label">模型状态:</span>
+                            <span class="risk-status-value" id="riskModelStatus">--</span>
+                        </div>
+                        <div class="risk-status-item">
+                            <span class="risk-status-label">风险等级:</span>
+                            <span class="risk-status-value" id="riskLevel">--</span>
+                        </div>
+                        <div class="risk-status-item">
+                            <span class="risk-status-label">建议仓位:</span>
+                            <span class="risk-status-value" id="riskPosition">--</span>
+                        </div>
+                        <div class="risk-status-item">
+                            <span class="risk-status-label">夏普比率:</span>
+                            <span class="risk-status-value" id="riskSharpe">--</span>
+                        </div>
+                        <div class="risk-status-item">
+                            <span class="risk-status-label">最大回撤:</span>
+                            <span class="risk-status-value" id="riskMaxDD">--</span>
+                        </div>
+                        <div class="risk-status-item">
+                            <span class="risk-status-label">VaR (95%):</span>
+                            <span class="risk-status-value" id="riskVaR">--</span>
+                        </div>
+                    </div>
+                    <p style="color:#666; margin-top: 15px; text-align: center;">更新时间: <span id="riskUpdateTime">--</span></p>
+                </div>
+
+                <!-- 过拟合防御体系 -->
+                <div class="risk-section">
+                    <div class="chart-title">🛡️ 过拟合防御体系</div>
+                    <div class="metrics" id="defenseMetrics">
+                        <div class="metric-card">
+                            <div class="metric-title">防御体系状态</div>
+                            <div class="metric-value" id="defenseStatus">--</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-title">交叉验证</div>
+                            <div class="metric-value" id="cvStatus">--</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-title">蒙特卡洛稳健性</div>
+                            <div class="metric-value" id="mcStatus">--</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-title">Walk-Forward测试</div>
+                            <div class="metric-value" id="wfStatus">--</div>
+                        </div>
+                    </div>
+                    <div id="defenseAlerts" style="margin-top: 20px;"></div>
+                </div>
+
+                <!-- 模型失效预警 -->
+                <div class="risk-section">
+                    <div class="chart-title">⚠️ 模型失效预警</div>
+                    <div class="metrics" id="failureMetrics">
+                        <div class="metric-card">
+                            <div class="metric-title">预警状态</div>
+                            <div class="metric-value" id="failureStatus">--</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-title">MAPE监控</div>
+                            <div class="metric-value" id="mapeStatus">--</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-title">残差自相关</div>
+                            <div class="metric-value" id="dwStatus">--</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-title">波动率异常</div>
+                            <div class="metric-value" id="volStatus">--</div>
+                        </div>
+                    </div>
+                    <div id="failureAlerts" style="margin-top: 20px;"></div>
+                </div>
+
+                <!-- 风险指标详情 -->
+                <div class="risk-section">
+                    <div class="chart-title">📊 风险指标详情</div>
+                    <div class="metrics" id="riskMetrics">
+                        <div class="metric-card">
+                            <div class="metric-title">年化收益率</div>
+                            <div class="metric-value" id="annualReturn">--</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-title">年化波动率</div>
+                            <div class="metric-value" id="annualVol">--</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-title">索提诺比率</div>
+                            <div class="metric-value" id="sortinoRatio">--</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-title">卡尔玛比率</div>
+                            <div class="metric-value" id="calmarRatio">--</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-title">胜率</div>
+                            <div class="metric-value" id="winRate">--</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-title">盈亏比</div>
+                            <div class="metric-value" id="profitLossRatio">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 操作按钮 -->
+                <div style="text-align: center; margin-top: 30px;">
+                    <button class="btn" onclick="refreshRiskData()">🔄 重新分析</button>
+                    <button class="btn" onclick="window.open('/api/risk-management', '_blank')" style="margin-left: 10px;">📄 查看完整报告</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -417,14 +608,20 @@
             document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
             
+            // 隐藏所有页面
+            document.getElementById('pricePage').classList.add('hidden');
+            document.getElementById('macroPage').classList.add('hidden');
+            document.getElementById('riskPage').classList.add('hidden');
+            
             if (page === 'price') {
                 document.getElementById('pricePage').classList.remove('hidden');
-                document.getElementById('macroPage').classList.add('hidden');
                 loadPriceData();
-            } else {
-                document.getElementById('pricePage').classList.add('hidden');
+            } else if (page === 'macro') {
                 document.getElementById('macroPage').classList.remove('hidden');
                 loadMacroData();
+            } else if (page === 'risk') {
+                document.getElementById('riskPage').classList.remove('hidden');
+                loadRiskData();
             }
         }
 
@@ -526,10 +723,12 @@
                 if (model.startsWith('_')) continue; // 跳过内部字段
                 const card = document.createElement('div');
                 card.className = 'metric-card';
+                const r2Value = (metric.R2 !== null && metric.R2 !== undefined) ? metric.R2.toFixed(4) : '--';
+                const rmseValue = (metric.RMSE !== null && metric.RMSE !== undefined) ? metric.RMSE.toFixed(2) : '--';
                 card.innerHTML = `
                     <div class="metric-title">${model}</div>
-                    <div class="metric-value" style="color: ${colors[model] || '#FFD700'}">${metric.R2.toFixed(4)}</div>
-                    <div class="metric-sub">RMSE: ¥${metric.RMSE.toFixed(2)}</div>
+                    <div class="metric-value" style="color: ${colors[model] || '#FFD700'}">${r2Value}</div>
+                    <div class="metric-sub">RMSE: ¥${rmseValue}</div>
                 `;
                 metricsSection.appendChild(card);
             }
@@ -550,15 +749,22 @@
                     data.future_predictions['Ensemble (Weighted)'][i] : 
                     (lr + rf + arima) / 3;
                 
+                const lrStr = (lr !== undefined && lr !== null) ? '¥' + lr.toFixed(2) : '--';
+                const rfStr = (rf !== undefined && rf !== null) ? '¥' + rf.toFixed(2) : '--';
+                const arimaStr = (arima !== undefined && arima !== null) ? '¥' + arima.toFixed(2) : '--';
+                const xgbStr = (xgb !== undefined && xgb !== null) ? '¥' + xgb.toFixed(2) : '-';
+                const lstmStr = (lstm !== undefined && lstm !== null) ? '¥' + lstm.toFixed(2) : '-';
+                const ensembleStr = (ensemble !== undefined && ensemble !== null) ? '¥' + ensemble.toFixed(2) : '--';
+                
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${data.future_dates[i]}</td>
-                    <td style="color: #3b82f6">¥${lr.toFixed(2)}</td>
-                    <td style="color: #22c55e">¥${rf.toFixed(2)}</td>
-                    <td style="color: #f59e0b">¥${arima.toFixed(2)}</td>
-                    <td style="color: #ef4444">${xgb ? '¥' + xgb.toFixed(2) : '-'}</td>
-                    <td style="color: #a855f7">${lstm ? '¥' + lstm.toFixed(2) : '-'}</td>
-                    <td class="highlight">¥${ensemble.toFixed(2)}</td>
+                    <td style="color: #3b82f6">${lrStr}</td>
+                    <td style="color: #22c55e">${rfStr}</td>
+                    <td style="color: #f59e0b">${arimaStr}</td>
+                    <td style="color: #ef4444">${xgbStr}</td>
+                    <td style="color: #a855f7">${lstmStr}</td>
+                    <td class="highlight">${ensembleStr}</td>
                 `;
                 tbody.appendChild(row);
             }
@@ -569,8 +775,8 @@
 
         function updateMacroUI(data) {
             // 更新宏观得分
-            document.getElementById('macroTotalScore').textContent = data.total_score.toFixed(2);
-            document.getElementById('macroUpdateTime').textContent = data.update_time;
+            document.getElementById('macroTotalScore').textContent = (data.total_score !== undefined && data.total_score !== null) ? data.total_score.toFixed(2) : '--';
+            document.getElementById('macroUpdateTime').textContent = data.update_time || '--';
             
             const sentimentEl = document.getElementById('macroSentiment');
             sentimentEl.textContent = data.sentiment;
@@ -613,15 +819,15 @@
                     <div class="factor-details">
                         <div class="factor-detail">
                             原始得分
-                            <span>${factor.base_score.toFixed(1)}</span>
+                            <span>${(factor.base_score !== undefined && factor.base_score !== null) ? factor.base_score.toFixed(1) : '--'}</span>
                         </div>
                         <div class="factor-detail">
                             调整后
-                            <span style="color: ${factor.adjusted_score > 5 ? '#00d084' : '#ff4757'}">${factor.adjusted_score.toFixed(1)}</span>
+                            <span style="color: ${factor.adjusted_score > 5 ? '#00d084' : '#ff4757'}">${(factor.adjusted_score !== undefined && factor.adjusted_score !== null) ? factor.adjusted_score.toFixed(1) : '--'}</span>
                         </div>
                         <div class="factor-detail">
                             加权得分
-                            <span style="color: #FFD700">${factor.weighted_score.toFixed(3)}</span>
+                            <span style="color: #FFD700">${(factor.weighted_score !== undefined && factor.weighted_score !== null) ? factor.weighted_score.toFixed(3) : '--'}</span>
                         </div>
                     </div>
                     <div class="progress-bar">
@@ -644,8 +850,9 @@
             document.getElementById('macroTargetPrice').textContent = '¥' + pred.target_price.toLocaleString();
             
             const returnEl = document.getElementById('macroExpectedReturn');
-            returnEl.textContent = (pred.expected_return > 0 ? '+' : '') + pred.expected_return + '%';
-            returnEl.style.color = pred.expected_return > 0 ? '#00d084' : '#ff4757';
+            const expectedReturn = (pred.expected_return !== undefined && pred.expected_return !== null) ? pred.expected_return : 0;
+            returnEl.textContent = (expectedReturn > 0 ? '+' : '') + expectedReturn + '%';
+            returnEl.style.color = expectedReturn > 0 ? '#00d084' : '#ff4757';
             
             // 绘制宏观预测图表
             drawMacroChart(pred.dates, pred.predictions, pred.current_price);
@@ -771,6 +978,151 @@
                     }
                 }
             });
+        }
+
+        // 加载风险管理数据
+        async function loadRiskData() {
+            document.getElementById('riskLoading').classList.remove('hidden');
+            document.getElementById('riskContent').classList.add('hidden');
+            
+            try {
+                // 首先获取仪表盘数据
+                const dashboardResponse = await fetch('/api/risk-dashboard');
+                const dashboardData = await dashboardResponse.json();
+                
+                if (dashboardData.available) {
+                    // 更新仪表盘
+                    document.getElementById('riskModelStatus').textContent = dashboardData.model_status || '--';
+                    document.getElementById('riskLevel').textContent = dashboardData.risk_level || '--';
+                    document.getElementById('riskPosition').textContent = dashboardData.position_suggestion || '--';
+                    document.getElementById('riskSharpe').textContent = (dashboardData.sharpe_ratio !== null && dashboardData.sharpe_ratio !== undefined) ? dashboardData.sharpe_ratio.toFixed(2) : '--';
+                    document.getElementById('riskMaxDD').textContent = (dashboardData.max_drawdown !== null && dashboardData.max_drawdown !== undefined) ? dashboardData.max_drawdown + '%' : '--';
+                    document.getElementById('riskVaR').textContent = (dashboardData.var_95 !== null && dashboardData.var_95 !== undefined) ? dashboardData.var_95 + '%' : '--';
+                    document.getElementById('riskUpdateTime').textContent = dashboardData.update_time || '--';
+                    
+                    // 设置状态颜色
+                    setStatusColor('riskModelStatus', dashboardData.status);
+                    setStatusColor('riskLevel', dashboardData.risk_level?.includes('低') ? 'NORMAL' : dashboardData.risk_level?.includes('中') ? 'WARNING' : 'CRITICAL');
+                }
+                
+                // 获取详细风险管理数据
+                const response = await fetch('/api/risk-management');
+                const data = await response.json();
+                
+                if (data.available && data.data) {
+                    const riskData = data.data;
+                    
+                    // 更新过拟合防御体系
+                    if (riskData.defense_results) {
+                        const defense = riskData.defense_results;
+                        document.getElementById('defenseStatus').textContent = defense.overall_status || '--';
+                        
+                        // 更新各层状态
+                        if (defense.layers) {
+                            document.getElementById('cvStatus').textContent = defense.layers.cross_validation?.status || '--';
+                            document.getElementById('mcStatus').textContent = defense.layers.monte_carlo?.status || '--';
+                            document.getElementById('wfStatus').textContent = defense.layers.walk_forward?.status || '--';
+                        }
+                        
+                        // 显示警报
+                        const alertsDiv = document.getElementById('defenseAlerts');
+                        alertsDiv.innerHTML = '';
+                        if (defense.critical_alerts && defense.critical_alerts.length > 0) {
+                            defense.critical_alerts.forEach(alert => {
+                                alertsDiv.innerHTML += `<div class="alert-box alert-critical">${alert}</div>`;
+                            });
+                        }
+                        if (defense.warnings && defense.warnings.length > 0) {
+                            defense.warnings.forEach(warning => {
+                                alertsDiv.innerHTML += `<div class="alert-box alert-warning">${warning}</div>`;
+                            });
+                        }
+                        if ((!defense.critical_alerts || defense.critical_alerts.length === 0) && 
+                            (!defense.warnings || defense.warnings.length === 0)) {
+                            alertsDiv.innerHTML = '<div class="alert-box alert-success">✅ 所有防御层检测通过，模型稳健性良好</div>';
+                        }
+                    }
+                    
+                    // 更新模型失效预警
+                    if (riskData.failure_alerts) {
+                        const failure = riskData.failure_alerts;
+                        document.getElementById('failureStatus').textContent = failure.status || '--';
+                        setStatusColor('failureStatus', failure.status);
+                        
+                        // 更新指标状态
+                        if (failure.indicators) {
+                            document.getElementById('mapeStatus').textContent = failure.indicators.mape_status || '--';
+                            document.getElementById('dwStatus').textContent = failure.indicators.dw_status || '--';
+                            document.getElementById('volStatus').textContent = failure.indicators.var_break ? '⚠️突破' : '✅正常';
+                        }
+                        
+                        // 显示警报
+                        const alertsDiv = document.getElementById('failureAlerts');
+                        alertsDiv.innerHTML = '';
+                        if (failure.critical_alerts && failure.critical_alerts.length > 0) {
+                            failure.critical_alerts.forEach(alert => {
+                                alertsDiv.innerHTML += `<div class="alert-box alert-critical">${alert}</div>`;
+                            });
+                        }
+                        if (failure.warnings && failure.warnings.length > 0) {
+                            failure.warnings.forEach(warning => {
+                                alertsDiv.innerHTML += `<div class="alert-box alert-warning">${warning}</div>`;
+                            });
+                        }
+                        if ((!failure.critical_alerts || failure.critical_alerts.length === 0) && 
+                            (!failure.warnings || failure.warnings.length === 0)) {
+                            alertsDiv.innerHTML = '<div class="alert-box alert-success">✅ 所有指标正常，模型运行良好</div>';
+                        }
+                    }
+                    
+                    // 更新风险指标
+                    if (riskData.risk_metrics) {
+                        const metrics = riskData.risk_metrics;
+                        const annualReturn = (metrics.annual_return !== undefined && metrics.annual_return !== null) ? (metrics.annual_return * 100).toFixed(2) + '%' : '--';
+                        const annualVol = (metrics.annual_volatility !== undefined && metrics.annual_volatility !== null) ? (metrics.annual_volatility * 100).toFixed(2) + '%' : '--';
+                        const sortinoRatio = (metrics.sortino_ratio !== undefined && metrics.sortino_ratio !== null) ? metrics.sortino_ratio.toFixed(2) : '--';
+                        const calmarRatio = (metrics.calmar_ratio !== undefined && metrics.calmar_ratio !== null) ? metrics.calmar_ratio.toFixed(2) : '--';
+                        const winRate = (metrics.win_rate !== undefined && metrics.win_rate !== null) ? (metrics.win_rate * 100).toFixed(1) + '%' : '--';
+                        const profitLossRatio = (metrics.profit_loss_ratio !== undefined && metrics.profit_loss_ratio !== null) ? metrics.profit_loss_ratio.toFixed(2) : '--';
+                        
+                        document.getElementById('annualReturn').textContent = annualReturn;
+                        document.getElementById('annualVol').textContent = annualVol;
+                        document.getElementById('sortinoRatio').textContent = sortinoRatio;
+                        document.getElementById('calmarRatio').textContent = calmarRatio;
+                        document.getElementById('winRate').textContent = winRate;
+                        document.getElementById('profitLossRatio').textContent = profitLossRatio;
+                    }
+                }
+                
+                document.getElementById('riskLoading').classList.add('hidden');
+                document.getElementById('riskContent').classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('风险管理数据加载失败:', error);
+                document.getElementById('riskLoading').innerHTML = '<p style="color:#ff4757;">加载失败: ' + error.message + '</p>';
+            }
+        }
+        
+        // 设置状态颜色
+        function setStatusColor(elementId, status) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+            
+            element.style.color = '#fff';
+            if (status === 'NORMAL' || status === 'PASS' || status?.includes('正常') || status?.includes('低')) {
+                element.style.color = '#00d084';
+            } else if (status === 'WARNING' || status?.includes('预警') || status?.includes('中')) {
+                element.style.color = '#ffc107';
+            } else if (status === 'CRITICAL' || status?.includes('失效') || status?.includes('高') || status?.includes('极高')) {
+                element.style.color = '#ff4757';
+            }
+        }
+        
+        // 刷新风险管理数据
+        async function refreshRiskData() {
+            // 清除风险管理缓存
+            await fetch('/api/refresh', { method: 'POST' });
+            loadRiskData();
         }
 
         async function refreshData() {

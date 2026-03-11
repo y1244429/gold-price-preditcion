@@ -1,5 +1,6 @@
 """
 黄金价格预测Web应用 - 使用上海期货交易所黄金2604数据
+集成风险管理模块
 """
 from flask import Flask, render_template, jsonify
 import yfinance as yf
@@ -14,6 +15,15 @@ import warnings
 import time
 import os
 warnings.filterwarnings('ignore')
+
+# 导入风险管理模块
+try:
+    from gold_risk_management import GoldRiskManager
+    RISK_MANAGEMENT_AVAILABLE = True
+    print("✅ 风险管理模块已加载")
+except ImportError as e:
+    RISK_MANAGEMENT_AVAILABLE = False
+    print(f"⚠️ 风险管理模块未加载: {e}")
 
 # 导入 Serper 数据源（yfinance限流时的备用）
 try:
@@ -102,6 +112,19 @@ lstm_cache = {
     'prices_hash': None,
     'last_update': None
 }
+
+# 风险管理缓存
+risk_cache = {
+    'risk_manager': None,
+    'validation_results': None,
+    'stress_results': None,
+    'risk_metrics': None,
+    'feature_importance': None,
+    'defense_results': None,
+    'failure_alerts': None,
+    'last_update': None
+}
+RISK_CACHE_MINUTES = 60  # 风险管理结果缓存60分钟
 
 # 清除旧缓存（LSTM修复后）
 print("🧹 清除LSTM旧缓存（数据归一化修复）...")
@@ -203,23 +226,37 @@ def get_sina_gold_data():
         return None
 
 def get_shfe_current_price():
-    """获取上海期货交易所黄金当前价格"""
+    """获取上海期货交易所黄金当前价格 - 优先实时行情"""
     try:
         import akshare as ak
-        # 尝试获取不同合约
-        contracts = ['AU2604', 'AU2506', 'AU2504', 'AU2412']
-        for contract in contracts:
-            try:
-                df = ak.futures_zh_realtime(symbol=contract)
-                if df is not None and not df.empty:
-                    price = float(df['最新价'].iloc[0])
-                    print(f"✅ 成功获取上期所黄金{contract}当前价格: {price}")
-                    return price, contract
-            except:
-                continue
         
-        # 备用：获取日线数据的最新收盘价
-        # 优先获取 AU2604
+        # 方法1: 获取实时行情（优先）
+        try:
+            df_spot = ak.futures_zh_spot(symbol='AU2604')
+            if df_spot is not None and not df_spot.empty:
+                # 获取最新价格（可能是 current_price 或最新价）
+                if 'current_price' in df_spot.columns:
+                    price = float(df_spot['current_price'].iloc[0])
+                elif '最新价' in df_spot.columns:
+                    price = float(df_spot['最新价'].iloc[0])
+                else:
+                    price = float(df_spot.iloc[0, 5])  # 第6列通常是当前价
+                print(f"✅ 成功获取上期所黄金AU2604实时价格: {price}")
+                return price, 'AU2604'
+        except Exception as e:
+            print(f"⚠️ 实时行情获取失败: {e}")
+        
+        # 方法2: 尝试主力连续合约 AU0（价格更接近市场）
+        try:
+            df_main = ak.futures_zh_daily_sina(symbol='AU0')
+            if df_main is not None and not df_main.empty:
+                price = float(df_main['close'].iloc[-1])
+                print(f"✅ 成功获取上期所黄金主力连续AU0价格: {price}")
+                return price, 'AU0'
+        except Exception as e:
+            print(f"⚠️ 主力连续获取失败: {e}")
+        
+        # 方法3: 获取日线数据的最新收盘价
         for sym in ['AU2604', 'AU2506']:
             try:
                 df = ak.futures_zh_daily_sina(symbol=sym)
@@ -949,6 +986,26 @@ def get_data():
             date = datetime.now() + timedelta(days=i)
             future_dates.append(date.strftime('%Y-%m-%d'))
         
+        # 获取最新实时价格（优先于日线收盘价）
+        print("🔄 获取最新实时价格...")
+        current_price_realtime, price_contract = get_shfe_current_price()
+        
+        if current_price_realtime is not None:
+            # 使用实时价格
+            current_price = current_price_realtime
+            last_close = float(df['Close'].iloc[-1])  # 昨日收盘价
+            price_change = current_price - last_close
+            price_change_pct = (price_change / last_close * 100) if last_close > 0 else 0
+            data_source_with_price = f"{data_source} | 实时{price_contract}"
+            print(f"✅ 使用实时价格: {current_price} ({price_contract})")
+        else:
+            # 使用日线数据
+            current_price = float(df['Close'].iloc[-1])
+            last_close = float(df['Close'].iloc[-2]) if len(df) >= 2 else current_price
+            price_change = current_price - last_close
+            price_change_pct = (price_change / last_close * 100) if last_close > 0 else 0
+            data_source_with_price = data_source
+        
         # 准备响应数据
         data = {
             'dates': df['Date'].dt.strftime('%Y-%m-%d').tolist()[-100:],
@@ -958,15 +1015,15 @@ def get_data():
             'rsi': df['RSI'].tolist()[-100:] if 'RSI' in df.columns else [],
             'macd': df['MACD'].tolist()[-100:] if 'MACD' in df.columns else [],
             'volume': df['Volume'].tolist()[-100:] if 'Volume' in df.columns else [],
-            'current_price': round(float(df['Close'].iloc[-1]), 2),
-            'price_change': round(float(df['Close'].iloc[-1] - df['Close'].iloc[-2]), 2),
-            'price_change_pct': round(float((df['Close'].iloc[-1] - df['Close'].iloc[-2]) / df['Close'].iloc[-2] * 100), 2),
+            'current_price': round(current_price, 2),
+            'price_change': round(price_change, 2),
+            'price_change_pct': round(price_change_pct, 2),
             'metrics': model_results['metrics'],
             'predictions': model_results['predictions'],
             'actual': model_results['actual'],
             'future_predictions': model_results['future'],
             'future_dates': future_dates,
-            'data_source': data_source,
+            'data_source': data_source_with_price,
             'update_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         
@@ -990,14 +1047,18 @@ def get_data():
 @app.route('/api/refresh', methods=['POST'])
 def refresh():
     """强制刷新数据"""
-    global cache, lstm_cache
+    global cache, lstm_cache, data_fetch_cache
     cache['data'] = None
     cache['last_update'] = None
     # 同时清除LSTM缓存
     lstm_cache['model_result'] = None
     lstm_cache['prices_hash'] = None
     lstm_cache['last_update'] = None
-    return jsonify({'status': 'success', 'message': '数据已刷新（包括LSTM缓存）'})
+    # 清除数据获取缓存（关键！确保获取最新价格）
+    data_fetch_cache['df'] = None
+    data_fetch_cache['timestamp'] = None
+    print("🔄 所有缓存已清除，将重新获取最新数据")
+    return jsonify({'status': 'success', 'message': '数据已刷新（包括数据获取缓存）'})
 
 
 # ============ 增强版宏观因子API ============
@@ -1527,11 +1588,14 @@ class MacroFactorCollector:
             from enhanced_gpr_epu import get_epu_index, EnhancedDataCollector
             result = get_epu_index('China')
             
-            if result.get('value') is not None and result.get('status') != 'error':
+            # 检查数据有效性：值不能为None，不能为0（中国EPU正常值通常在100-400之间）
+            if (result.get('value') is not None and 
+                result.get('status') != 'error' and 
+                result.get('value', 0) > 10):  # EPU值应该大于10才有效
                 print(f"✅ 成功获取官方EPU-China数据: {result['value']}")
                 return result
             else:
-                raise Exception(result.get('error', 'EPU-China数据获取失败'))
+                raise Exception(f"EPU-China数据无效: value={result.get('value')}")
                 
         except Exception as e:
             print(f"⚠️ 官方EPU-China获取失败: {e}")
@@ -1541,17 +1605,22 @@ class MacroFactorCollector:
             from enhanced_gpr_epu import EnhancedDataCollector
             collector = EnhancedDataCollector()
             result = collector.get_epu_data('China')
-            if result.get('status') == 'success':
+            # 检查状态成功且值有效（大于10）
+            if (result.get('status') == 'success' and 
+                result.get('value') is not None and 
+                result.get('value', 0) > 10):
                 print(f"✅ 通过EnhancedDataCollector获取EPU-China: {result['value']}")
                 return {
                     'value': result['value'],
                     'change_1m': result.get('change_1m', 0),
                     'trend': result.get('trend', 'stable'),
-                    'weight': 0.07,
+                    'weight': 0.01,
                     'impact': 'positive',
                     'data_source': result.get('data_source', 'China EPU Official'),
                     'reliability': result.get('reliability', '极高')
                 }
+            else:
+                raise Exception(f"EPU-China数据无效: value={result.get('value')}")
         except Exception as e:
             print(f"⚠️ EnhancedDataCollector EPU-China失败: {e}")
         
@@ -1562,6 +1631,9 @@ class MacroFactorCollector:
             
             if result.get('value') is not None and result.get('status') != 'error':
                 print(f"✅ 成功获取官方EPU-US数据: {result['value']}")
+                # 确保权重为1%
+                result['weight'] = 0.01
+                result['data_source'] = result.get('data_source', 'US Economic Policy Uncertainty Index') + ' (备用)'
                 return result
             else:
                 raise Exception(result.get('error', 'EPU-US数据获取失败'))
@@ -1588,7 +1660,7 @@ class MacroFactorCollector:
                         'value': round(latest[epu_col], 2),
                         'change_1m': round(change, 2),
                         'trend': 'up' if change > 0 else 'down',
-                        'weight': 0.07,
+                        'weight': 0.01,
                         'impact': 'positive',
                         'data_source': f'EPU {country} (缓存)',
                         'reliability': '高',
@@ -1630,7 +1702,7 @@ class MacroFactorCollector:
                 'value': round(epu_proxy, 0),
                 'change_1m': 0,
                 'trend': 'up' if volatility > 15 else 'down',
-                'weight': 0.07,
+                'weight': 0.01,
                 'impact': 'positive',
                 'data_source': '标普500波动率 (备用)',
                 'reliability': '中',
@@ -1946,23 +2018,53 @@ class MacroFactorCollector:
         price_source = ""
         contract = ""
         
-        # 强制优先获取上海期货交易所黄金当前价格
+        # 强制优先获取上海期货交易所黄金实时价格
         try:
             import akshare as ak
-            # 尝试获取主力合约或常用合约的日线数据
-            contracts = ['AU2604', 'AU2506', 'AU2504', 'AU2412', 'AU0']
-            for sym in contracts:
+            
+            # 方法1: 获取实时行情（优先）
+            try:
+                df_spot = ak.futures_zh_spot(symbol='AU2604')
+                if df_spot is not None and not df_spot.empty:
+                    if 'current_price' in df_spot.columns:
+                        current_price = float(df_spot['current_price'].iloc[0])
+                    elif '最新价' in df_spot.columns:
+                        current_price = float(df_spot['最新价'].iloc[0])
+                    else:
+                        current_price = float(df_spot.iloc[0, 5])
+                    contract = 'AU2604'
+                    price_source = "上海期货交易所(实时)"
+                    print(f"✅ 宏观预测使用上期所黄金AU2604实时价格: {current_price} 元/克")
+            except Exception as e:
+                print(f"⚠️ 实时行情获取失败: {e}")
+            
+            # 方法2: 尝试主力连续合约 AU0
+            if current_price is None:
                 try:
-                    df = ak.futures_zh_daily_sina(symbol=sym)
-                    if df is not None and not df.empty:
-                        current_price = float(df['close'].iloc[-1])
-                        contract = sym
-                        price_source = "上海期货交易所"
-                        print(f"✅ 宏观预测使用上期所黄金{sym}价格: {current_price} 元/克")
-                        break
+                    df_main = ak.futures_zh_daily_sina(symbol='AU0')
+                    if df_main is not None and not df_main.empty:
+                        current_price = float(df_main['close'].iloc[-1])
+                        contract = 'AU0'
+                        price_source = "上海期货交易所(主力连续)"
+                        print(f"✅ 宏观预测使用上期所黄金主力连续AU0价格: {current_price} 元/克")
                 except Exception as e:
-                    print(f"⚠️ 合约{sym}获取失败: {e}")
-                    continue
+                    print(f"⚠️ 主力连续获取失败: {e}")
+            
+            # 方法3: 尝试获取主力合约或常用合约的日线数据
+            if current_price is None:
+                contracts = ['AU2604', 'AU2506', 'AU2504', 'AU2412']
+                for sym in contracts:
+                    try:
+                        df = ak.futures_zh_daily_sina(symbol=sym)
+                        if df is not None and not df.empty:
+                            current_price = float(df['close'].iloc[-1])
+                            contract = sym
+                            price_source = "上海期货交易所(日线)"
+                            print(f"✅ 宏观预测使用上期所黄金{sym}日线收盘价: {current_price} 元/克")
+                            break
+                    except Exception as e:
+                        print(f"⚠️ 合约{sym}获取失败: {e}")
+                        continue
         except Exception as e:
             print(f"❌ akshare导入失败: {e}")
         
@@ -2164,6 +2266,474 @@ def get_data_quality():
     
     return jsonify(report)
 
+
+# ============ 风险管理模块 API ============
+
+def run_risk_management_analysis(df):
+    """
+    运行风险管理分析
+    
+    参数:
+        df: 包含黄金数据的DataFrame
+    
+    返回:
+        风险管理分析结果
+    """
+    global risk_cache
+    
+    if not RISK_MANAGEMENT_AVAILABLE:
+        return {'error': '风险管理模块未可用'}
+    
+    # 检查缓存
+    if risk_cache['last_update'] is not None:
+        if datetime.now() - risk_cache['last_update'] < timedelta(minutes=RISK_CACHE_MINUTES):
+            print(f"📦 使用风险管理缓存（{RISK_CACHE_MINUTES}分钟内）")
+            return {
+                'risk_metrics': risk_cache['risk_metrics'],
+                'defense_results': risk_cache['defense_results'],
+                'failure_alerts': risk_cache['failure_alerts'],
+                'feature_importance': risk_cache['feature_importance'],
+                'cached': True
+            }
+    
+    try:
+        print("🛡️ 启动风险管理分析...")
+        
+        # 创建风险管理器
+        risk_manager = GoldRiskManager()
+        
+        # 准备特征
+        features_df = prepare_risk_features(df)
+        
+        if len(features_df) < 100:
+            return {'error': '数据量不足，无法进行风险管理分析'}
+        
+        # 分离特征和目标
+        X = features_df.drop('target', axis=1)
+        y = features_df['target']
+        
+        # 创建模型
+        model = RandomForestRegressor(n_estimators=50, max_depth=5, random_state=42)
+        
+        # 1. 滚动窗口验证
+        print("🔍 执行滚动窗口交叉验证...")
+        validation_results = risk_manager.rolling_window_validation(X, y, model)
+        
+        # 2. 计算风险指标
+        print("📈 计算风险指标...")
+        predictions = pd.Series(validation_results['predictions'], 
+                               index=validation_results['dates'])
+        actuals = pd.Series(validation_results['actuals'], 
+                           index=validation_results['dates'])
+        
+        # 使用实际日收益率计算风险指标（从原始价格数据获取）
+        close_col = 'Close' if 'Close' in df.columns else 'close'
+        daily_returns = df[close_col].pct_change().dropna()
+        # 对齐日期范围
+        if len(validation_results['dates']) > 0:
+            start_date = min(validation_results['dates'])
+            end_date = max(validation_results['dates'])
+            daily_returns_aligned = daily_returns[(daily_returns.index >= start_date) & 
+                                                  (daily_returns.index <= end_date)]
+        else:
+            daily_returns_aligned = daily_returns
+        
+        # 应用交易成本
+        net_returns = risk_manager.apply_transaction_costs(daily_returns_aligned, turnover_rate=0.5)
+        risk_metrics = risk_manager.calculate_risk_metrics(net_returns)
+        
+        # 3. 压力测试
+        print("🔥 执行压力测试...")
+        df_test = pd.DataFrame({'returns': daily_returns_aligned}, index=daily_returns_aligned.index)
+        stress_results = risk_manager.stress_test(df_test, predictions, actuals)
+        
+        # 4. 特征重要性
+        print("📊 分析特征重要性...")
+        model.fit(X.iloc[-252:], y.iloc[-252:])  # 使用最近1年数据
+        feature_importance = risk_manager.analyze_feature_importance(X, y, model)
+        
+        # 5. 过拟合防御体系
+        print("🛡️ 执行过拟合防御体系检测...")
+        # 根据数据量调整参数
+        n_samples = len(X)
+        if n_samples < 300:
+            # 数据不足时使用更小的参数
+            n_splits = min(3, n_samples // 50)  # 减少折数
+            print(f"   ⚠️ 数据量较少({n_samples}行)，调整参数: n_splits={n_splits}")
+        else:
+            n_splits = 5
+        defense_results = risk_manager.overfitting_defense_system(X, y, model, n_splits=n_splits)
+        
+        # 6. 模型失效预警
+        print("⚠️ 执行模型失效预警检测...")
+        feature_history = []
+        if feature_importance is not None:
+            importance_dict = dict(zip(
+                feature_importance['feature'],
+                feature_importance['importance_pct'] / 100
+            ))
+            feature_history.append(importance_dict)
+        
+        failure_alerts = risk_manager.model_failure_detection(
+            actuals.iloc[-100:],
+            predictions.iloc[-100:],
+            feature_history,
+            actuals.iloc[-100:]
+        )
+        
+        # 转换为可序列化的格式
+        risk_metrics_serializable = convert_to_native(risk_metrics)
+        
+        # 简化defense_results以便序列化
+        defense_summary = {
+            'overall_status': defense_results.get('overall_status', 'UNKNOWN'),
+            'timestamp': defense_results.get('timestamp'),
+            'warnings': defense_results.get('warnings', []),
+            'critical_alerts': defense_results.get('critical_alerts', [])
+        }
+        
+        if 'defense_layers' in defense_results:
+            defense_summary['layers'] = {}
+            for layer_name, layer_data in defense_results['defense_layers'].items():
+                if isinstance(layer_data, dict):
+                    defense_summary['layers'][layer_name] = {
+                        'status': layer_data.get('status', 'UNKNOWN')
+                    }
+        
+        # 简化failure_alerts
+        failure_summary = {
+            'status': failure_alerts.get('status', 'UNKNOWN'),
+            'timestamp': failure_alerts.get('timestamp'),
+            'warnings': failure_alerts.get('warnings', []),
+            'critical_alerts': failure_alerts.get('critical_alerts', [])
+        }
+        
+        # 转换特征重要性
+        feature_importance_serializable = None
+        if feature_importance is not None:
+            feature_importance_serializable = feature_importance.head(10).to_dict('records')
+        
+        # 更新缓存
+        risk_cache.update({
+            'risk_manager': risk_manager,
+            'validation_results': validation_results,
+            'stress_results': stress_results,
+            'risk_metrics': risk_metrics_serializable,
+            'feature_importance': feature_importance_serializable,
+            'defense_results': defense_summary,
+            'failure_alerts': failure_summary,
+            'last_update': datetime.now()
+        })
+        
+        print("✅ 风险管理分析完成")
+        
+        return {
+            'risk_metrics': risk_metrics_serializable,
+            'defense_results': defense_summary,
+            'failure_alerts': failure_summary,
+            'feature_importance': feature_importance_serializable,
+            'cached': False
+        }
+        
+    except Exception as e:
+        import traceback
+        print(f"❌ 风险管理分析失败: {e}")
+        print(traceback.format_exc())
+        return {'error': str(e), 'traceback': traceback.format_exc()}
+
+
+def prepare_risk_features(df):
+    """
+    准备风险管理所需的特征数据
+    
+    参数:
+        df: 原始数据DataFrame
+    
+    返回:
+        特征DataFrame
+    """
+    features = pd.DataFrame(index=df.index)
+    
+    # 确保收盘价存在
+    close_col = 'Close' if 'Close' in df.columns else 'close'
+    volume_col = 'Volume' if 'Volume' in df.columns else 'volume'
+    
+    # 技术指标
+    # RSI
+    delta = df[close_col].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    features['rsi'] = 100 - (100 / (1 + rs))
+    
+    # MACD
+    exp1 = df[close_col].ewm(span=12).mean()
+    exp2 = df[close_col].ewm(span=26).mean()
+    features['macd'] = exp1 - exp2
+    features['macd_signal'] = features['macd'].ewm(span=9).mean()
+    
+    # 移动平均线差异
+    features['ma5'] = df[close_col].rolling(window=5).mean()
+    features['ma20'] = df[close_col].rolling(window=20).mean()
+    features['ma_diff'] = (features['ma5'] - features['ma20']) / features['ma20']
+    
+    # 波动率
+    features['volatility'] = df[close_col].pct_change().rolling(window=20).std()
+    
+    # 价格动量
+    features['momentum_5'] = df[close_col].pct_change(5)
+    features['momentum_20'] = df[close_col].pct_change(20)
+    
+    # 成交量特征
+    if volume_col in df.columns:
+        features['volume_ma'] = df[volume_col].rolling(window=20).mean()
+        features['volume_ratio'] = df[volume_col] / features['volume_ma']
+    else:
+        features['volume_ma'] = 0
+        features['volume_ratio'] = 1
+    
+    # 目标变量 - 未来5日收益率
+    features['target'] = df[close_col].pct_change(5).shift(-5)
+    
+    # 删除缺失值
+    features = features.dropna()
+    
+    return features
+
+
+@app.route('/api/risk-management')
+def get_risk_management():
+    """
+    获取风险管理分析结果
+    
+    返回包含以下内容的JSON:
+    - risk_metrics: 风险指标（夏普比率、最大回撤、VaR等）
+    - defense_results: 过拟合防御体系结果
+    - failure_alerts: 模型失效预警
+    - feature_importance: 特征重要性分析
+    """
+    if not RISK_MANAGEMENT_AVAILABLE:
+        return jsonify({'error': '风险管理模块未安装', 'available': False}), 503
+    
+    try:
+        # 获取数据
+        df = get_real_gold_data()
+        if df is None or df.empty:
+            return jsonify({'error': '无法获取数据'}), 500
+        
+        # 运行风险管理分析
+        result = run_risk_management_analysis(df)
+        
+        if 'error' in result:
+            return jsonify(result), 500
+        
+        return jsonify({
+            'available': True,
+            'data': result,
+            'update_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        })
+        
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
+@app.route('/api/risk-dashboard')
+def get_risk_dashboard():
+    """
+    获取风控监控仪表盘数据
+    
+    返回简化的风控状态，用于前端仪表盘展示
+    """
+    if not RISK_MANAGEMENT_AVAILABLE:
+        return jsonify({
+            'available': False,
+            'message': '风险管理模块未安装'
+        })
+    
+    try:
+        # 使用缓存的风险管理结果
+        if risk_cache['last_update'] is None:
+            # 如果没有缓存，返回空状态
+            return jsonify({
+                'available': True,
+                'status': 'UNKNOWN',
+                'message': '风险管理分析尚未运行，请访问 /api/risk-management 生成数据',
+                'model_status': '⚪未启动',
+                'position_suggestion': '请先运行风险管理分析',
+                'risk_level': '未知',
+                'update_time': None
+            })
+        
+        # 构建仪表盘数据
+        risk_metrics = risk_cache.get('risk_metrics', {})
+        defense_results = risk_cache.get('defense_results', {})
+        failure_alerts = risk_cache.get('failure_alerts', {})
+        
+        # 确定模型状态
+        model_status = failure_alerts.get('status', 'NORMAL')
+        status_icons = {
+            'NORMAL': '🟢正常',
+            'WARNING': '🟡预警',
+            'CRITICAL': '🔴失效'
+        }
+        model_status_display = status_icons.get(model_status, '⚪未知')
+        
+        # 确定风险等级
+        max_drawdown = risk_metrics.get('max_drawdown', 0)
+        sharpe_ratio = risk_metrics.get('sharpe_ratio', 0)
+        
+        if max_drawdown < -0.25 or sharpe_ratio < 0.3:
+            risk_level = '🔴极高'
+        elif max_drawdown < -0.15 or sharpe_ratio < 0.5:
+            risk_level = '🟠高'
+        elif max_drawdown < -0.10 or sharpe_ratio < 1.0:
+            risk_level = '🟡中等'
+        else:
+            risk_level = '🟢低'
+        
+        # 仓位建议
+        if risk_cache['risk_manager'] is not None:
+            try:
+                position = risk_cache['risk_manager'].kelly_position_sizing(
+                    win_rate=risk_metrics.get('win_rate', 0.55),
+                    profit_loss_ratio=risk_metrics.get('profit_loss_ratio', 1.5),
+                    account_size=1000000,
+                    kelly_fraction=0.25
+                )
+                position_suggestion = f"{position['final_position_pct']*100:.1f}% (Kelly)"
+            except:
+                position_suggestion = "10-15% (保守)"
+        else:
+            position_suggestion = "10-15% (保守)"
+        
+        # 防御体系状态
+        defense_status = defense_results.get('overall_status', 'UNKNOWN')
+        
+        dashboard = {
+            'available': True,
+            'status': model_status,
+            'model_status': model_status_display,
+            'risk_level': risk_level,
+            'position_suggestion': position_suggestion,
+            'sharpe_ratio': round(sharpe_ratio, 2) if sharpe_ratio else None,
+            'max_drawdown': round(max_drawdown * 100, 1) if max_drawdown else None,
+            'var_95': round(risk_metrics.get('var_95', 0) * 100, 2) if risk_metrics.get('var_95') else None,
+            'win_rate': round(risk_metrics.get('win_rate', 0) * 100, 1) if risk_metrics.get('win_rate') else None,
+            'defense_status': defense_status,
+            'warnings': len(failure_alerts.get('warnings', [])),
+            'critical_alerts': len(failure_alerts.get('critical_alerts', [])),
+            'cached': True,
+            'update_time': risk_cache['last_update'].strftime('%Y-%m-%d %H:%M:%S') if risk_cache['last_update'] else None
+        }
+        
+        return jsonify(dashboard)
+        
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
+@app.route('/api/risk-position', methods=['POST'])
+def calculate_risk_position():
+    """
+    计算风险调整后的仓位建议
+    
+    POST参数 (JSON):
+    - account_size: 账户规模（默认1000000）
+    - current_price: 当前价格（可选）
+    - market_regime: 市场环境（normal/trending/ranging/high_volatility，默认normal）
+    
+    返回:
+    - position_sizing: 仓位管理建议
+    - stop_strategy: 止损策略
+    - pyramiding: 加仓策略
+    - risk_advice: 风控建议
+    """
+    if not RISK_MANAGEMENT_AVAILABLE:
+        return jsonify({'error': '风险管理模块未安装', 'available': False}), 503
+    
+    try:
+        from flask import request
+        
+        # 获取请求参数
+        data = request.get_json() or {}
+        account_size = data.get('account_size', 1000000)
+        current_price = data.get('current_price')
+        market_regime = data.get('market_regime', 'normal')
+        
+        # 确保风险管理分析已运行
+        if risk_cache['last_update'] is None or risk_cache['risk_manager'] is None:
+            # 先运行风险管理分析
+            df = get_real_gold_data()
+            if df is None or df.empty:
+                return jsonify({'error': '无法获取数据'}), 500
+            run_risk_management_analysis(df)
+        
+        risk_manager = risk_cache['risk_manager']
+        risk_metrics = risk_cache.get('risk_metrics', {})
+        
+        # 计算仓位管理
+        position_sizing = risk_manager.calculate_position_sizing(
+            risk_metrics,
+            account_size=account_size
+        )
+        
+        # Kelly准则仓位
+        kelly_position = risk_manager.kelly_position_sizing(
+            win_rate=risk_metrics.get('win_rate', 0.55),
+            profit_loss_ratio=risk_metrics.get('profit_loss_ratio', 1.5),
+            account_size=account_size,
+            kelly_fraction=0.25
+        )
+        
+        # 分层仓位架构
+        hierarchical = risk_manager.hierarchical_position_structure(
+            base_position=kelly_position['final_position_pct'],
+            account_size=account_size,
+            risk_budget=0.10
+        )
+        
+        # 止损策略
+        stop_strategy = None
+        if current_price:
+            stop_strategy = risk_manager.generate_stop_loss_strategy(
+                current_price, risk_metrics
+            )
+        
+        # 加仓策略
+        pyramiding = None
+        if current_price:
+            pyramiding = risk_manager.generate_pyramiding_strategy(
+                current_price, position_sizing, risk_metrics
+            )
+        
+        # 风控建议
+        stress_results = risk_cache.get('stress_results', {})
+        risk_advice = risk_manager.generate_risk_control_advice(
+            risk_metrics, stress_results, market_regime
+        )
+        
+        return jsonify({
+            'available': True,
+            'account_size': account_size,
+            'position_sizing': convert_to_native(position_sizing),
+            'kelly_position': convert_to_native(kelly_position),
+            'hierarchical_position': convert_to_native(hierarchical),
+            'stop_strategy': convert_to_native(stop_strategy) if stop_strategy else None,
+            'pyramiding': convert_to_native(pyramiding) if pyramiding else None,
+            'risk_advice': {
+                'risk_level': risk_advice.get('risk_level'),
+                'risk_score': risk_advice.get('risk_score'),
+                'special_warnings': risk_advice.get('special_warnings', [])
+            },
+            'update_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        })
+        
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
 if __name__ == '__main__':
     import sys
     port = 8080
@@ -2191,11 +2761,25 @@ if __name__ == '__main__':
     print("  ✅ 黄金ETF持仓 - SPDR Gold Shares Official")
     print("      网址: https://www.spdrgoldshares.com/")
     print("      备用: 华安黄金ETF (518880)")
+    print("\n🛡️ 风险管理模块:")
+    if RISK_MANAGEMENT_AVAILABLE:
+        print("  ✅ 状态: 已启用")
+        print("  ✅ 过拟合防御体系: 4层防御机制")
+        print("  ✅ 模型失效预警: 实时监控4大指标")
+        print("  ✅ Kelly准则动态仓位")
+        print("  ✅ 分层仓位架构")
+        print("  ✅ 压力测试: 2008/2020/2022危机情景")
+    else:
+        print("  ❌ 状态: 未启用 (gold_risk_management.py 未找到)")
     print("\n🌐 服务地址:")
     print(f"  • 主页面: http://127.0.0.1:{port}/")
     print(f"  • 宏观因子API: http://127.0.0.1:{port}/api/macro-factors")
     print(f"  • 带种子重现: http://127.0.0.1:{port}/api/macro-factors?seed=42")
     print(f"  • 数据质量: http://127.0.0.1:{port}/api/data-quality")
+    if RISK_MANAGEMENT_AVAILABLE:
+        print(f"  • 风险管理: http://127.0.0.1:{port}/api/risk-management")
+        print(f"  • 风控仪表盘: http://127.0.0.1:{port}/api/risk-dashboard")
+        print(f"  • 仓位计算: POST http://127.0.0.1:{port}/api/risk-position")
     print("\n🎲 预测模式: 基于波动率的随机游走")
     print("   - 每次刷新生成不同但统计合理的路径")
     print("   - 添加 ?seed=数字 参数可重现相同结果")

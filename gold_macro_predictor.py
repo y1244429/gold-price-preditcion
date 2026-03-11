@@ -297,22 +297,52 @@ def predict_gold_price(factors, scores, total_score):
     price_source = ""
     contract = ""
     
-    # 优先获取上海期货交易所黄金当前价格
+    # 优先获取上海期货交易所黄金实时价格
     try:
         import akshare as ak
-        # 尝试获取主力合约或常用合约的日线数据
-        contracts = ['AU2604', 'AU2506', 'AU2504', 'AU2412', 'AU0']
-        for sym in contracts:
+        
+        # 方法1: 获取实时行情（优先）
+        try:
+            df_spot = ak.futures_zh_spot(symbol='AU2604')
+            if df_spot is not None and not df_spot.empty:
+                if 'current_price' in df_spot.columns:
+                    current_price = float(df_spot['current_price'].iloc[0])
+                elif '最新价' in df_spot.columns:
+                    current_price = float(df_spot['最新价'].iloc[0])
+                else:
+                    current_price = float(df_spot.iloc[0, 5])
+                contract = 'AU2604'
+                price_source = "上海期货交易所(实时)"
+                print(f"✅ 使用上期所黄金AU2604实时价格: {current_price} 元/克")
+        except Exception as e:
+            print(f"⚠️ 实时行情获取失败: {e}")
+        
+        # 方法2: 尝试主力连续合约 AU0
+        if current_price is None:
             try:
-                df = ak.futures_zh_daily_sina(symbol=sym)
-                if df is not None and not df.empty:
-                    current_price = float(df['close'].iloc[-1])
-                    contract = sym
-                    price_source = "上海期货交易所"
-                    print(f"✅ 使用上期所黄金{sym}价格: {current_price} 元/克")
-                    break
+                df_main = ak.futures_zh_daily_sina(symbol='AU0')
+                if df_main is not None and not df_main.empty:
+                    current_price = float(df_main['close'].iloc[-1])
+                    contract = 'AU0'
+                    price_source = "上海期货交易所(主力连续)"
+                    print(f"✅ 使用上期所黄金主力连续AU0价格: {current_price} 元/克")
             except Exception as e:
-                continue
+                print(f"⚠️ 主力连续获取失败: {e}")
+        
+        # 方法3: 尝试获取主力合约或常用合约的日线数据
+        if current_price is None:
+            contracts = ['AU2604', 'AU2506', 'AU2504', 'AU2412']
+            for sym in contracts:
+                try:
+                    df = ak.futures_zh_daily_sina(symbol=sym)
+                    if df is not None and not df.empty:
+                        current_price = float(df['close'].iloc[-1])
+                        contract = sym
+                        price_source = "上海期货交易所(日线)"
+                        print(f"✅ 使用上期所黄金{sym}日线收盘价: {current_price} 元/克")
+                        break
+                except Exception as e:
+                    continue
     except Exception as e:
         print(f"⚠️ akshare获取失败: {e}")
     
