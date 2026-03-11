@@ -1,0 +1,133 @@
+{
+  "average_score": 4.1,
+  "high_quality": [
+    "金银比/铜金比"
+  ],
+  "medium_quality": [
+    "地缘政治风险",
+    "经济不确定性"
+  ],
+  "low_quality": [
+    "美元指数",
+    "实际利率",
+    "通胀预期",
+    "美债收益率",
+    "VIX波动率",
+    "ETF持仓"
+  ],
+  "details": {
+    "美元指数": {
+      "factor_name": "美元指数 (DXY)",
+      "weight": 0.2,
+      "impact": "negative",
+      "data_sources": [],
+      "realism_score": 3,
+      "issues": [
+        "Yahoo Finance: Too Many Requests. Rate limited. Try after a while."
+      ],
+      "assessment": "⚠️ 数据真实度低 - 需要备用数据源"
+    },
+    "实际利率": {
+      "factor_name": "实际利率",
+      "weight": 0.18,
+      "impact": "negative",
+      "data_sources": [],
+      "realism_score": 2,
+      "issues": [
+        "Yahoo Finance: Too Many Requests. Rate limited. Try after a while."
+      ],
+      "assessment": "❌ 数据真实度低"
+    },
+    "通胀预期": {
+      "factor_name": "通胀预期",
+      "weight": 0.15,
+      "impact": "positive",
+      "data_sources": [],
+      "realism_score": 4,
+      "issues": [
+        "当前使用随机数模拟，非真实数据"
+      ],
+      "assessment": "⚠️ 数据真实度低 - 当前使用模拟数据，建议使用盈亏平衡通胀率或CPI"
+    },
+    "美债收益率": {
+      "factor_name": "美债收益率",
+      "weight": 0.12,
+      "impact": "negative",
+      "data_sources": [],
+      "realism_score": 3,
+      "issues": [
+        "Yahoo Finance: Too Many Requests. Rate limited. Try after a while."
+      ],
+      "assessment": "⚠️ 数据获取失败"
+    },
+    "地缘政治风险": {
+      "factor_name": "地缘政治风险",
+      "weight": 0.1,
+      "impact": "positive",
+      "data_sources": [],
+      "realism_score": 5,
+      "issues": [
+        "使用VIX作为代理，非真实地缘政治风险指数"
+      ],
+      "assessment": "⚠️ 数据为代理指标 - VIX不能完全代表地缘政治风险"
+    },
+    "VIX波动率": {
+      "factor_name": "VIX波动率",
+      "weight": 0.08,
+      "impact": "positive",
+      "data_sources": [],
+      "realism_score": 3,
+      "issues": [
+        "Yahoo Finance: Too Many Requests. Rate limited. Try after a while."
+      ],
+      "assessment": "⚠️ 数据获取失败"
+    },
+    "经济不确定性": {
+      "factor_name": "经济不确定性",
+      "weight": 0.07,
+      "impact": "positive",
+      "data_sources": [
+        {
+          "source": "akshare (上证指数波动率)",
+          "value": 36.27,
+          "reliability": "中",
+          "type": "代理指标"
+        }
+      ],
+      "realism_score": 5,
+      "issues": [
+        "使用标普500波动率作为代理"
+      ],
+      "assessment": "⚠️ 数据为代理指标 - 使用波动率代替EPU指数"
+    },
+    "ETF持仓": {
+      "factor_name": "ETF持仓",
+      "weight": 0.05,
+      "impact": "positive",
+      "data_sources": [],
+      "realism_score": 3,
+      "issues": [
+        "使用模拟数据，非真实ETF持仓"
+      ],
+      "assessment": "❌ 数据真实度低 - 当前使用模拟数据，建议爬取GLD官方持仓"
+    },
+    "金银比/铜金比": {
+      "factor_name": "金银比/铜金比",
+      "weight": 0.05,
+      "impact": "positive",
+      "data_sources": [
+        {
+          "source": "akshare (上期所)",
+          "gold_silver": 71.3,
+          "reliability": "高",
+          "type": "真实数据"
+        }
+      ],
+      "realism_score": 9,
+      "issues": [
+        "Yahoo Finance: Too Many Requests. Rate limited. Try after a while."
+      ],
+      "assessment": "✅ 数据真实度高 - 金银铜价格数据可靠"
+    }
+  }
+}

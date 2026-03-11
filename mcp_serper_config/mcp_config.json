@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "serper-search": {
+      "command": "npx",
+      "args": ["-y", "serper-search-scrape-mcp-server"],
+      "env": {
+        "SERPER_API_KEY": "your_api_key_here"
+      },
+      "description": "Google 搜索 MCP 服务器 - 支持网页搜索和内容抓取"
+    }
+  }
+}

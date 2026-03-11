@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>黄金价格预测系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">🪙</span>
+                <h1>黄金价格预测系统</h1>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-primary" onclick="refreshData()">
+                    <span class="icon">🔄</span> 刷新数据
+                </button>
+            </div>
+        </header>
+
+        <!-- Current Price Card -->
+        <div class="price-card">
+            <div class="price-info">
+                <span class="price-label">当前黄金价格</span>
+                <div class="price-value">
+                    <span id="currentPrice">加载中...</span>
+                    <span class="currency">USD/盎司</span>
+                </div>
+                <div class="price-change" id="priceChange">
+                    <span class="change-value">--</span>
+                    <span class="change-percent">(--%)</span>
+                </div>
+            </div>
+            <div class="price-date" id="priceDate">--</div>
+        </div>
+
+        <!-- Metrics Cards -->
+        <div class="metrics-grid" id="metricsGrid">
+            <div class="metric-card">
+                <div class="metric-title">Random Forest</div>
+                <div class="metric-value">R²: <span class="loading">加载中...</span></div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Linear Regression</div>
+                <div class="metric-value">R²: <span class="loading">加载中...</span></div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">ARIMA</div>
+                <div class="metric-value">R²: <span class="loading">加载中...</span></div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">LSTM</div>
+                <div class="metric-value">R²: <span class="loading">加载中...</span></div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="charts-section">
+            <div class="chart-container main-chart">
+                <div class="chart-header">
+                    <h3>📈 价格走势与预测</h3>
+                    <div class="chart-controls">
+                        <button class="btn btn-sm active" onclick="showChart('price')">价格</button>
+                        <button class="btn btn-sm" onclick="showChart('prediction')">预测对比</button>
+                        <button class="btn btn-sm" onclick="showChart('forecast')">未来预测</button>
+                    </div>
+                </div>
+                <canvas id="mainChart"></canvas>
+            </div>
+
+            <div class="charts-row">
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>📊 技术指标 - RSI</h3>
+                    </div>
+                    <canvas id="rsiChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>📉 MACD</h3>
+                    </div>
+                    <canvas id="macdChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Forecast Table -->
+        <div class="forecast-section">
+            <div class="section-header">
+                <h3>🔮 未来7天价格预测</h3>
+                <div class="forecast-summary" id="forecastSummary">
+                    <span class="trend-indicator">趋势分析: 加载中...</span>
+                </div>
+            </div>
+            <div class="table-container">
+                <table class="forecast-table" id="forecastTable">
+                    <thead>
+                        <tr>
+                            <th>日期</th>
+                            <th>Random Forest</th>
+                            <th>Linear Regression</th>
+                            <th>ARIMA</th>
+                            <th>LSTM</th>
+                            <th class="highlight">集成预测</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="6" class="loading-cell">加载中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Model Comparison -->
+        <div class="comparison-section">
+            <div class="section-header">
+                <h3>📊 模型性能对比</h3>
+            </div>
+            <div class="chart-container">
+                <canvas id="comparisonChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>⚠️ 免责声明：本预测结果仅供参考，不构成投资建议。投资有风险，入市需谨慎。</p>
+            <p>数据更新于 <span id="updateTime">--</span></p>
+        </footer>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <span class="toast-message"></span>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

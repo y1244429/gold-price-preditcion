@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>黄金价格高级预测系统 - 三维度分析</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+            color: #fff;
+            min-height: 100vh;
+        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        
+        header {
+            text-align: center;
+            padding: 30px 0;
+            border-bottom: 2px solid rgba(255,215,0,0.3);
+            margin-bottom: 30px;
+        }
+        h1 {
+            font-size: 32px;
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        .subtitle { color: #888; font-size: 14px; }
+        
+        .price-card {
+            background: linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,165,0,0.05));
+            border: 2px solid rgba(255,215,0,0.3);
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .price-value {
+            font-size: 48px;
+            font-weight: bold;
+            color: #FFD700;
+        }
+        
+        .tabs {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+        .tab {
+            padding: 15px 30px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        .tab:hover, .tab.active {
+            background: rgba(255,215,0,0.1);
+            border-color: rgba(255,215,0,0.3);
+        }
+        .tab-title { font-size: 16px; font-weight: bold; color: #FFD700; }
+        .tab-subtitle { font-size: 12px; color: #888; margin-top: 5px; }
+        
+        .content-section {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .metric-box {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .metric-label { color: #888; font-size: 12px; margin-bottom: 8px; }
+        .metric-value { font-size: 24px; font-weight: bold; color: #FFD700; }
+        
+        .forecast-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        .forecast-table th, .forecast-table td {
+            padding: 12px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .forecast-table th {
+            background: rgba(255,215,0,0.1);
+            color: #FFD700;
+            font-weight: 600;
+        }
+        .trend-up { color: #00d084; }
+        .trend-down { color: #ff4757; }
+        
+        .chart-container {
+            height: 400px;
+            margin-top: 20px;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            color: #000;
+            border: none;
+            padding: 15px 40px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            margin: 20px auto;
+            display: block;
+        }
+        
+        .hidden { display: none; }
+        .loading {
+            text-align: center;
+            padding: 60px;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255,215,0,0.2);
+            border-top-color: #FFD700;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .method-tag {
+            display: inline-block;
+            padding: 5px 15px;
+            background: rgba(255,215,0,0.1);
+            border: 1px solid rgba(255,215,0,0.3);
+            border-radius: 20px;
+            font-size: 12px;
+            color: #FFD700;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🪙 黄金价格高级预测系统</h1>
+            <p class="subtitle">三维度预测分析：短期技术指标 | 中期宏观数据 | 长期基本面</p>
+        </header>
+
+        <div class="price-card">
+            <div style="color: #888; margin-bottom: 10px;">当前黄金价格</div>
+            <div class="price-value" id="currentPrice">--</div>
+            <div style="color: #666; margin-top: 10px;">更新时间: <span id="updateTime">--</span></div>
+        </div>
+
+        <button class="btn" onclick="loadPredictions()">🔮 开始三维度预测</button>
+
+        <div id="loadingSection" class="loading hidden">
+            <div class="spinner"></div>
+            <p style="color: #888;">正在进行三维度预测分析...</p>
+        </div>
+
+        <div id="resultsSection" class="hidden">
+            <!-- 标签页 -->
+            <div class="tabs">
+                <div class="tab active" onclick="showTab('short')">
+                    <div class="tab-title">短期预测</div>
+                    <div class="tab-subtitle">3-10天 | 技术指标</div>
+                </div>
+                <div class="tab" onclick="showTab('medium')">
+                    <div class="tab-title">中期预测</div>
+                    <div class="tab-subtitle">10-30天 | 宏观数据</div>
+                </div>
+                <div class="tab" onclick="showTab('long')">
+                    <div class="tab-title">长期预测</div>
+                    <div class="tab-subtitle">30-90天 | 基本面</div>
+                </div>
+            </div>
+
+            <!-- 短期预测 -->
+            <div id="shortTab" class="tab-content">
+                <div class="content-section">
+                    <div class="method-tag" id="shortMethod">技术指标 + 机器学习</div>
+                    <div class="metrics-grid">
+                        <div class="metric-box">
+                            <div class="metric-label">R² 决定系数</div>
+                            <div class="metric-value" id="shortR2">--</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-label">RMSE 均方根误差</div>
+                            <div class="metric-value" id="shortRMSE">--</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-label">10天预测均价</div>
+                            <div class="metric-value" id="shortAvg">--</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-label">预测趋势</div>
+                            <div class="metric-value" id="shortTrend">--</div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="shortChart"></canvas>
+                    </div>
+                    <table class="forecast-table">
+                        <thead>
+                            <tr>
+                                <th>日期</th>
+                                <th>预测价格</th>
+                                <th>涨跌</th>
+                                <th>涨跌幅</th>
+                            </tr>
+                        </thead>
+                        <tbody id="shortTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 中期预测 -->
+            <div id="mediumTab" class="tab-content hidden">
+                <div class="content-section">
+                    <div class="method-tag" id="mediumMethod">宏观数据 + 随机森林</div>
+                    <div class="metrics-grid">
+                        <div class="metric-box">
+                            <div class="metric-label">R² 决定系数</div>
+                            <div class="metric-value" id="mediumR2">--</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-label">RMSE 均方根误差</div>
+                            <div class="metric-value" id="mediumRMSE">--</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-label">30天预测均价</div>
+                            <div class="metric-value" id="mediumAvg">--</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-label">预测趋势</div>
+                            <div class="metric-value" id="mediumTrend">--</div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="mediumChart"></canvas>
+                    </div>
+                    <table class="forecast-table">
+                        <thead>
+                            <tr>
+                                <th>日期</th>
+                                <th>预测价格</th>
+                                <th>阶段</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mediumTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 长期预测 -->
+            <div id="longTab" class="tab-content hidden">
+                <div class="content-section">
+                    <div class="method-tag" id="longMethod">基本面趋势 + 季节性</div>
+                    <div class="metrics-grid">
+                        <div class="metric-box">
+                            <div class="metric-label">R² 决定系数</div>
+                            <div class="metric-value" id="longR2">--</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-label">RMSE 均方根误差</div>
+                            <div class="metric-value" id="longRMSE">--</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-label">90天预测均价</div>
+                            <div class="metric-value" id="longAvg">--</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-label">预测趋势</div>
+                            <div class="metric-value" id="longTrend">--</div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="longChart"></canvas>
+                    </div>
+                    <table class="forecast-table">
+                        <thead>
+                            <tr>
+                                <th>日期</th>
+                                <th>预测价格</th>
+                                <th>月度趋势</th>
+                            </tr>
+                        </thead>
+                        <tbody id="longTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let predictionData = null;
+        let charts = {};
+
+        async function loadPredictions() {
+            document.getElementById('loadingSection').classList.remove('hidden');
+            document.getElementById('resultsSection').classList.add('hidden');
+            
+            try {
+                const response = await fetch('/api/predictions');
+                predictionData = await response.json();
+                
+                updateUI(predictionData);
+                
+                document.getElementById('loadingSection').classList.add('hidden');
+                document.getElementById('resultsSection').classList.remove('hidden');
+            } catch (error) {
+                console.error('加载预测失败:', error);
+                alert('预测加载失败，请重试');
+            }
+        }
+
+        function updateUI(data) {
+            // 更新当前价格
+            document.getElementById('currentPrice').textContent = '$' + data.current_price.toLocaleString();
+            document.getElementById('updateTime').textContent = data.update_time;
+            
+            // 更新短期预测
+            updateShortTerm(data.short_term, data.current_price);
+            
+            // 更新中期预测
+            updateMediumTerm(data.medium_term, data.current_price);
+            
+            // 更新长期预测
+            updateLongTerm(data.long_term, data.current_price);
+        }
+
+        function updateShortTerm(short, currentPrice) {
+            document.getElementById('shortMethod').textContent = short.method;
+            document.getElementById('shortR2').textContent = short.metrics.R2.toFixed(4);
+            document.getElementById('shortRMSE').textContent = '$' + short.metrics.RMSE.toFixed(2);
+            
+            const avg = short.predictions.reduce((a, b) => a + b, 0) / short.predictions.length;
+            document.getElementById('shortAvg').textContent = '$' + avg.toFixed(2);
+            
+            const change = short.predictions[short.predictions.length - 1] - currentPrice;
+            const changePct = (change / currentPrice * 100).toFixed(2);
+            const trendEl = document.getElementById('shortTrend');
+            if (change > 0) {
+                trendEl.textContent = '↗ +' + changePct + '%';
+                trendEl.style.color = '#00d084';
+            } else {
+                trendEl.textContent = '↘ ' + changePct + '%';
+                trendEl.style.color = '#ff4757';
+            }
+            
+            // 填充表格
+            const tbody = document.getElementById('shortTable');
+            tbody.innerHTML = '';
+            short.dates.forEach((date, i) => {
+                const price = short.predictions[i];
+                const dayChange = i === 0 ? price - currentPrice : price - short.predictions[i-1];
+                const dayChangePct = (dayChange / (i === 0 ? currentPrice : short.predictions[i-1]) * 100).toFixed(2);
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${date}</td>
+                    <td style="color: #FFD700; font-weight: bold;">$${price.toFixed(2)}</td>
+                    <td class="${dayChange >= 0 ? 'trend-up' : 'trend-down'}">${dayChange >= 0 ? '+' : ''}${dayChange.toFixed(2)}</td>
+                    <td class="${dayChange >= 0 ? 'trend-up' : 'trend-down'}">${dayChange >= 0 ? '+' : ''}${dayChangePct}%</td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            // 绘制图表
+            drawChart('shortChart', short.dates, short.predictions, '短期预测 (3-10天)');
+        }
+
+        function updateMediumTerm(medium, currentPrice) {
+            document.getElementById('mediumMethod').textContent = medium.method;
+            document.getElementById('mediumR2').textContent = medium.metrics.R2.toFixed(4);
+            document.getElementById('mediumRMSE').textContent = '$' + medium.metrics.RMSE.toFixed(2);
+            
+            const avg = medium.predictions.reduce((a, b) => a + b, 0) / medium.predictions.length;
+            document.getElementById('mediumAvg').textContent = '$' + avg.toFixed(2);
+            
+            const change = medium.predictions[medium.predictions.length - 1] - currentPrice;
+            const changePct = (change / currentPrice * 100).toFixed(2);
+            const trendEl = document.getElementById('mediumTrend');
+            if (change > 0) {
+                trendEl.textContent = '↗ +' + changePct + '%';
+                trendEl.style.color = '#00d084';
+            } else {
+                trendEl.textContent = '↘ ' + changePct + '%';
+                trendEl.style.color = '#ff4757';
+            }
+            
+            // 填充表格（每5天显示一次）
+            const tbody = document.getElementById('mediumTable');
+            tbody.innerHTML = '';
+            for (let i = 0; i < medium.dates.length; i += 5) {
+                const phase = i < 10 ? '短期' : i < 20 ? '中期' : '后期';
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${medium.dates[i]}</td>
+                    <td style="color: #FFD700; font-weight: bold;">$${medium.predictions[i].toFixed(2)}</td>
+                    <td>${phase}</td>
+                `;
+                tbody.appendChild(row);
+            }
+            
+            // 绘制图表（抽样显示）
+            const sampleDates = medium.dates.filter((_, i) => i % 3 === 0);
+            const samplePreds = medium.predictions.filter((_, i) => i % 3 === 0);
+            drawChart('mediumChart', sampleDates, samplePreds, '中期预测 (10-30天)');
+        }
+
+        function updateLongTerm(long, currentPrice) {
+            document.getElementById('longMethod').textContent = long.method;
+            document.getElementById('longR2').textContent = long.metrics.R2.toFixed(4);
+            document.getElementById('longRMSE').textContent = '$' + long.metrics.RMSE.toFixed(2);
+            
+            const avg = long.predictions.reduce((a, b) => a + b, 0) / long.predictions.length;
+            document.getElementById('longAvg').textContent = '$' + avg.toFixed(2);
+            
+            const change = long.predictions[long.predictions.length - 1] - currentPrice;
+            const changePct = (change / currentPrice * 100).toFixed(2);
+            const trendEl = document.getElementById('longTrend');
+            if (change > 0) {
+                trendEl.textContent = '↗ +' + changePct + '%';
+                trendEl.style.color = '#00d084';
+            } else {
+                trendEl.textContent = '↘ ' + changePct + '%';
+                trendEl.style.color = '#ff4757';
+            }
+            
+            // 填充表格（每月显示一次）
+            const tbody = document.getElementById('longTable');
+            tbody.innerHTML = '';
+            for (let i = 0; i < long.dates.length; i += 30) {
+                const month = Math.floor(i / 30) + 1;
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${long.dates[i]}</td>
+                    <td style="color: #FFD700; font-weight: bold;">$${long.predictions[i].toFixed(2)}</td>
+                    <td>第${month}个月</td>
+                `;
+                tbody.appendChild(row);
+            }
+            
+            // 绘制图表（每周抽样）
+            const sampleDates = long.dates.filter((_, i) => i % 7 === 0);
+            const samplePreds = long.predictions.filter((_, i) => i % 7 === 0);
+            drawChart('longChart', sampleDates, samplePreds, '长期预测 (30-90天)');
+        }
+
+        function drawChart(canvasId, dates, predictions, label) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            
+            if (charts[canvasId]) {
+                charts[canvasId].destroy();
+            }
+            
+            charts[canvasId] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: label,
+                        data: predictions,
+                        borderColor: '#FFD700',
+                        backgroundColor: 'rgba(255,215,0,0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#aaa' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            ticks: { color: '#888' }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            ticks: {
+                                color: '#888',
+                                callback: function(value) {
+                                    return '$' + value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function showTab(tab) {
+            // 隐藏所有内容
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+            
+            // 显示选中内容
+            document.getElementById(tab + 'Tab').classList.remove('hidden');
+            event.currentTarget.classList.add('active');
+        }
+    </script>
+</body>
+</html>

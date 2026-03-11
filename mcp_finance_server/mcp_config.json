@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "finance-data": {
+      "command": "python",
+      "args": ["/Users/ydy/CodeBuddy/20260310193311/mcp_finance_server/server.py"],
+      "description": "金融数据MCP服务器 - 提供黄金期货、美元指数、美债收益率等数据"
+    }
+  }
+}

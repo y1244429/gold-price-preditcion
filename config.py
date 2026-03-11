@@ -1,0 +1,26 @@
+# 黄金价格预测模型配置
+
+# 数据配置
+GOLD_SYMBOL = "GC=F"  # 黄金期货代码
+START_DATE = "2020-01-01"
+END_DATE = "2026-03-10"
+
+# 特征配置
+LOOKBACK_WINDOW = 60  # 回溯窗口大小
+FORECAST_HORIZON = 7  # 预测未来天数
+
+# 模型配置
+TRAIN_TEST_SPLIT = 0.8
+RANDOM_STATE = 42
+
+# LSTM配置
+LSTM_UNITS = 50
+LSTM_EPOCHS = 50
+LSTM_BATCH_SIZE = 32
+
+# 随机森林配置
+RF_N_ESTIMATORS = 100
+RF_MAX_DEPTH = 10
+
+# ARIMA配置
+ARIMA_ORDER = (5, 1, 0)
