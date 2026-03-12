@@ -20,10 +20,28 @@ warnings.filterwarnings('ignore')
 try:
     from gold_risk_management import GoldRiskManager
     RISK_MANAGEMENT_AVAILABLE = True
-    print("✅ 风险管理模块已加载")
+    print("✅ 黄金风险管理模块已加载")
 except ImportError as e:
     RISK_MANAGEMENT_AVAILABLE = False
-    print(f"⚠️ 风险管理模块未加载: {e}")
+    print(f"⚠️ 黄金风险管理模块未加载: {e}")
+
+# 导入铜价风险管理模块
+try:
+    from copper_risk_management import CopperRiskManager, CopperRiskDashboard, ExtremeValueRiskModel
+    COPPER_RISK_AVAILABLE = True
+    print("✅ 铜价风险管理模块已加载")
+except ImportError as e:
+    COPPER_RISK_AVAILABLE = False
+    print(f"⚠️ 铜价风险管理模块未加载: {e}")
+
+# 导入铜价四层宏观调整因子模块
+try:
+    from copper_macro_factors import CopperMacroAdjustmentSystem, get_default_macro_data
+    COPPER_MACRO_AVAILABLE = True
+    print("✅ 铜价四层宏观调整因子模块已加载")
+except ImportError as e:
+    COPPER_MACRO_AVAILABLE = False
+    print(f"⚠️ 铜价四层宏观调整因子模块未加载: {e}")
 
 # 导入 Serper 数据源（yfinance限流时的备用）
 try:
@@ -93,9 +111,9 @@ def convert_to_native(obj):
     """将 numpy/pandas 类型转换为 Python 原生类型，以便 JSON 序列化"""
     if isinstance(obj, np.ndarray):
         return obj.tolist()
-    elif isinstance(obj, (np.int64, np.int32, np.int_)):
+    elif isinstance(obj, (np.int64, np.int32, np.integer)):
         return int(obj)
-    elif isinstance(obj, (np.float64, np.float32, np.float_)):
+    elif isinstance(obj, (np.float64, np.float32, np.floating)):
         return float(obj)
     elif isinstance(obj, dict):
         return {k: convert_to_native(v) for k, v in obj.items()}
@@ -1285,92 +1303,18 @@ class MacroFactorCollector:
             return self._fallback_factor('实际利率', 1.5, 0.30, 'negative', str(e))
     
     def get_inflation_cpi(self):
-        """3. 通胀预期 - 优先使用中国CPI"""
-        # 方法1: akshare 中国CPI (优先，因为 akshare 对中国数据支持更好)
-        try:
-            import akshare as ak
-            print("   尝试获取中国CPI...")
-            cpi_df = ak.macro_china_cpi()
-            if not cpi_df.empty:
-                # 列名是中文: '月份', '全国-当月', '全国-同比增长' 等
-                cpi_col = None
-                for col in cpi_df.columns:
-                    if '全国-当月' in col or '当月' in col:
-                        cpi_col = col
-                        break
-                
-                if cpi_col:
-                    current_cpi = float(cpi_df[cpi_col].iloc[-1])
-                    try:
-                        prev_cpi = float(cpi_df[cpi_col].iloc[-2])
-                        change = ((current_cpi - prev_cpi) / prev_cpi) * 100
-                    except:
-                        change = 0
-                    
-                    # 转换为百分比形式 (如果数据是107.0这种形式)
-                    if current_cpi > 50:  # 说明是指数形式
-                        current_cpi_pct = (current_cpi - 100)
-                    else:
-                        current_cpi_pct = current_cpi
-                    
-                    return {
-                        'value': round(current_cpi_pct, 2),
-                        'change_1m': round(change, 2),
-                        'trend': 'up' if change > 0 else 'down',
-                        'weight': 0.05,
-                        'impact': 'positive',
-                        'data_source': 'akshare 中国CPI (macro_china_cpi)',
-                        'reliability': '高',
-                        'method': '中国消费者价格指数(CPI)',
-                        'raw_value': round(current_cpi, 2)
-                    }
-        except Exception as e:
-            self.log(f"akshare中国CPI失败: {e}")
-        
-        # 方法2: 使用 akshare 的中国宏观经济数据 - CPI同比
-        try:
-            import akshare as ak
-            print("   尝试获取中国CPI同比...")
-            cpi_df = ak.macro_china_cpi()
-            if not cpi_df.empty:
-                # 使用同比增长率列
-                for col in cpi_df.columns:
-                    if '同比增长' in col:
-                        current_cpi = float(cpi_df[col].iloc[-1])
-                        try:
-                            prev_cpi = float(cpi_df[col].iloc[-2])
-                            change = current_cpi - prev_cpi
-                        except:
-                            change = 0
-                        
-                        return {
-                            'value': round(current_cpi, 2),
-                            'change_1m': round(change, 2),
-                            'trend': 'up' if change > 0 else 'down',
-                            'weight': 0.05,
-                            'impact': 'positive',
-                            'data_source': 'akshare 中国CPI同比',
-                            'reliability': '高',
-                            'method': '中国CPI同比增长率'
-                        }
-        except Exception as e:
-            self.log(f"akshare CPI同比失败: {e}")
-        
-        # 方法3: 盈亏平衡通胀率
-        try:
-            tnx = yf.Ticker("^TNX").history(period="1d")
-            breakeven = tnx['Close'].iloc[-1] - 1.5
-            return {
-                'value': round(breakeven, 2),
-                'change_1m': 0,
-                'trend': 'up' if breakeven > 2.5 else 'down',
-                'weight': 0.05,
-                'impact': 'positive',
-                'data_source': 'Breakeven Rate',
-                'reliability': '中'
-            }
-        except Exception as e:
-            return self._fallback_factor('通胀预期', 2.5, 0.05, 'positive', str(e))
+        """3. 通胀预期 (CPI) - 使用固定值1.8%"""
+        # 使用固定CPI值1.8%，不再从akshare获取实时数据
+        return {
+            'value': 1.8,
+            'change_1m': 0.0,
+            'trend': 'stable',
+            'weight': 0.05,
+            'impact': 'positive',
+            'data_source': '🟢 常数数据 (CPI 1.8%)',
+            'reliability': '高',
+            'method': '固定CPI值'
+        }
     
     def get_bond_yield(self):
         """4. 美债收益率 - 优先akshare, 备用Yahoo Finance"""
@@ -1948,12 +1892,15 @@ class MacroFactorCollector:
             # 趋势调整
             trend_bonus = 1.5 if data['trend'] == 'up' else -1.5
             
-            # 变化率调整
-            change_bonus = np.clip(data['change_1m'] * 0.5, -2, 2)
+            # 变化率调整 - 处理 None 或 NaN
+            change_1m = data.get('change_1m', 0)
+            if change_1m is None or (isinstance(change_1m, float) and np.isnan(change_1m)):
+                change_1m = 0
+            change_bonus = float(np.clip(change_1m * 0.5, -2, 2))
             
             # 最终得分
             raw_score = base_score + trend_bonus + change_bonus
-            final_score = np.clip(raw_score, 0, 10)
+            final_score = float(np.clip(raw_score, 0, 10))
             
             # 根据影响方向调整
             if data['impact'] == 'negative':
@@ -1963,8 +1910,13 @@ class MacroFactorCollector:
             
             weighted_score = adjusted_score * data['weight']
             
+            # 确保 raw_value 不是 NaN
+            raw_value = data['value']
+            if isinstance(raw_value, float) and np.isnan(raw_value):
+                raw_value = None
+            
             scores[name] = {
-                'raw_value': data['value'],
+                'raw_value': raw_value,
                 'base_score': round(base_score, 2),
                 'final_score': round(final_score, 2),
                 'adjusted_score': round(adjusted_score, 2),
@@ -1972,7 +1924,7 @@ class MacroFactorCollector:
                 'weight': data['weight'],
                 'impact': data['impact'],
                 'trend': data['trend'],
-                'change_1m': data['change_1m'],
+                'change_1m': change_1m if change_1m != 0 else 0,
                 'data_source': data.get('data_source', '未知'),
                 'reliability': data.get('reliability', '未知'),
                 'method': data.get('method', '')
@@ -1984,20 +1936,29 @@ class MacroFactorCollector:
     
     def _normalize_value(self, name, value):
         """归一化值为0-10分"""
+        # 处理 None 或 NaN 值
+        if value is None or (isinstance(value, float) and np.isnan(value)):
+            return 5.0  # 返回中性分数
+        
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return 5.0  # 无法转换时返回中性分数
+        
         if 'DXY' in name or '美元' in name:
-            return np.clip((value - 90) / 20 * 10, 0, 10)
+            return float(np.clip((value - 90) / 20 * 10, 0, 10))
         elif '利率' in name or 'TIPS' in name:
-            return np.clip((value + 2) / 7 * 10, 0, 10)
+            return float(np.clip((value + 2) / 7 * 10, 0, 10))
         elif '通胀' in name or 'CPI' in name:
-            return np.clip(value / 5 * 10, 0, 10)
+            return float(np.clip(value / 5 * 10, 0, 10))
         elif '收益率' in name:
-            return np.clip(value / 8 * 10, 0, 10)
+            return float(np.clip(value / 8 * 10, 0, 10))
         elif '风险' in name or 'GPR' in name or 'VIX' in name:
-            return np.clip(value / 40 * 10, 0, 10)
+            return float(np.clip(value / 40 * 10, 0, 10))
         elif '不确定' in name or 'EPU' in name:
-            return np.clip(value / 500 * 10, 0, 10)  # EPU尺度
+            return float(np.clip(value / 500 * 10, 0, 10))  # EPU尺度
         elif '持仓' in name or 'ETF' in name:
-            return np.clip((value - 700) / 300 * 10, 0, 10)
+            return float(np.clip((value - 700) / 300 * 10, 0, 10))
         else:
             return 5.0
     
@@ -2187,6 +2148,21 @@ class MacroFactorCollector:
         }
 
 
+def clean_nan_values(obj):
+    """递归清理数据中的 NaN 值，转换为 None"""
+    if isinstance(obj, dict):
+        return {k: clean_nan_values(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_nan_values(item) for item in obj]
+    elif isinstance(obj, (float, np.floating)):
+        if np.isnan(obj) or np.isinf(obj):
+            return None
+        return float(obj)
+    elif isinstance(obj, (np.integer,)):
+        return int(obj)
+    return obj
+
+
 @app.route('/api/macro-factors')
 def get_macro_factors():
     """获取宏观因子数据
@@ -2225,15 +2201,19 @@ def get_macro_factors():
         'unit': '元/克'
     }
     
-    return jsonify({
+    # 清理数据中的 NaN 值
+    result = {
         'factors': scores,
-        'total_score': round(total_score, 3),
+        'total_score': round(total_score, 3) if not (isinstance(total_score, float) and np.isnan(total_score)) else 0,
         'sentiment': prediction['sentiment'],
         'prediction': prediction,
         'price_info': price_info,
         'reliability_stats': reliability_stats,
         'update_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    })
+    }
+    result = clean_nan_values(result)
+    
+    return jsonify(result)
 
 @app.route('/api/data-quality')
 def get_data_quality():
@@ -2733,6 +2713,356 @@ def calculate_risk_position():
     except Exception as e:
         import traceback
         return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
+# ============ 铜价预测接口 ============
+
+def get_copper_data():
+    """获取铜期货数据"""
+    try:
+        import akshare as ak
+        
+        # 尝试获取上海期货交易所铜期货数据
+        contracts = ['CU2604', 'CU2505', 'CU2506', 'CU0']
+        
+        for contract in contracts:
+            try:
+                df = ak.futures_zh_daily_sina(symbol=contract)
+                if df is not None and not df.empty and len(df) > 50:
+                    df['Date'] = pd.to_datetime(df['date'])
+                    df.set_index('Date', inplace=True)
+                    df['Close'] = df['close'].astype(float)
+                    df['Open'] = df['open'].astype(float)
+                    df['High'] = df['high'].astype(float)
+                    df['Low'] = df['low'].astype(float)
+                    df['Volume'] = df['volume'].astype(float)
+                    df.attrs['data_source'] = f"上海期货交易所 {contract}"
+                    df.attrs['contract'] = contract
+                    return df
+            except Exception as e:
+                print(f"  合约{contract}获取失败: {e}")
+                continue
+        
+        # 备用：使用yfinance获取COMEX铜
+        import yfinance as yf
+        copper = yf.Ticker("HG=F")
+        df = copper.history(period="1y")
+        if not df.empty:
+            df.attrs['data_source'] = "COMEX铜期货 (HG=F)"
+            df.attrs['contract'] = "HG=F"
+            return df
+            
+    except Exception as e:
+        print(f"❌ 铜价数据获取失败: {e}")
+    return None
+
+def predict_copper_price(df):
+    """
+    预测铜价 - 集成风险管理功能
+    
+    提供概率预测和不确定性量化
+    """
+    from sklearn.linear_model import LinearRegression
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.metrics import r2_score
+    
+    # 计算技术指标
+    df['MA5'] = df['Close'].rolling(window=5).mean()
+    df['MA20'] = df['Close'].rolling(window=20).mean()
+    
+    # RSI
+    delta = df['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # MACD
+    ema12 = df['Close'].ewm(span=12).mean()
+    ema26 = df['Close'].ewm(span=26).mean()
+    df['MACD'] = ema12 - ema26
+    df['MACD_Signal'] = df['MACD'].ewm(span=9).mean()
+    
+    # 波动率
+    df['Volatility'] = df['Close'].pct_change().rolling(window=20).std()
+    
+    # 准备特征
+    df['Target'] = df['Close'].shift(-1)
+    df_clean = df.dropna()
+    
+    features = ['Close', 'MA5', 'MA20', 'RSI', 'MACD', 'Volatility']
+    X = df_clean[features]
+    y = df_clean['Target']
+    
+    # 划分训练集和测试集
+    train_size = len(X) - 30
+    X_train, X_test = X.iloc[:train_size], X.iloc[train_size:]
+    y_train, y_test = y.iloc[:train_size], y.iloc[train_size:]
+    
+    # 训练模型
+    models = {
+        'Linear Regression': LinearRegression(),
+        'Random Forest': RandomForestRegressor(n_estimators=100, random_state=42, max_depth=10)
+    }
+    
+    predictions = {}
+    model_r2 = {}
+    current_price = float(df_clean['Close'].iloc[-1])
+    
+    # 训练并评估模型
+    for name, model in models.items():
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        model_r2[name] = float(r2_score(y_test, y_pred))
+    
+    # 历史数据
+    historical_dates = df_clean.index.strftime('%Y-%m-%d').tolist()
+    historical_prices = df_clean['Close'].tolist()
+    
+    # 计算收益率用于风险管理
+    returns = df_clean['Close'].pct_change().dropna().values
+    
+    # ============ 风险管理集成 ============
+    risk_metrics = {}
+    prediction_intervals = {}
+    
+    if COPPER_RISK_AVAILABLE and len(X_train) > 50:
+        print("🛡️ 启用铜价风险管理...")
+        
+        # 1. 分位数回归预测区间
+        risk_mgr = CopperRiskManager(confidence_level=0.95)
+        risk_mgr.train_quantile_models(X_train.values, y_train.values)
+        
+        # 校准共形预测
+        cal_size = min(20, len(X_test) // 2)
+        if cal_size > 5:
+            risk_mgr.calibrate_conformal(X_test.values[:cal_size], y_test.values[:cal_size])
+        
+        # 2. 蒙特卡洛不确定性（使用Random Forest）
+        rf_model = models['Random Forest']
+        mc_result = risk_mgr.monte_carlo_uncertainty(X.values[-1:], rf_model, n_samples=100)
+        
+        # 3. EVT尾部风险
+        if len(returns) > 30:
+            evt_model = ExtremeValueRiskModel(threshold_percentile=0.95)
+            evt_model.fit(returns)
+            evt_metrics = evt_model.calculate_var_cvar(confidence=0.99)
+            risk_metrics['evt'] = evt_metrics
+        
+        # 4. 风险仪表板
+        dashboard = CopperRiskDashboard()
+        all_metrics = dashboard.calculate_all_metrics(
+            df_clean, 
+            {name: model.predict(X.values[-1:])[0] for name, model in models.items()}
+        )
+        risk_summary = dashboard.get_risk_summary(all_metrics)
+        risk_metrics['dashboard'] = risk_summary
+        risk_metrics['all_metrics'] = all_metrics
+        
+        print(f"   ✓ 风险评分: {risk_summary['risk_score']}/100 ({risk_summary['risk_level']})")
+    
+    # 预测未来7天
+    for name, model in models.items():
+        future_preds = []
+        future_uncertainty = []
+        last_row = X.iloc[-1:].copy()
+        
+        for i in range(7):
+            pred = model.predict(last_row)[0]
+            
+            # 如果启用风险管理，添加预测区间
+            if COPPER_RISK_AVAILABLE and 'risk_mgr' in locals():
+                pred_result = risk_mgr.predict_with_uncertainty(last_row.values, method='quantile')
+                future_preds.append({
+                    'point': float(pred),
+                    'lower_95': float(pred_result['lower_95'][0]),
+                    'upper_95': float(pred_result['upper_95'][0]),
+                    'uncertainty': float(pred_result['uncertainty_score'][0])
+                })
+            else:
+                future_preds.append({'point': float(pred)})
+            
+            # 更新特征用于下一步预测
+            last_row['Close'] = pred
+            last_row['MA5'] = df_clean['Close'].iloc[-5:].mean() * 0.8 + pred * 0.2
+            last_row['MA20'] = df_clean['Close'].iloc[-20:].mean() * 0.9 + pred * 0.1
+        
+        predictions[name] = future_preds
+    
+    # 集成预测（带置信区间）
+    ensemble_preds = []
+    for i in range(7):
+        if isinstance(predictions['Linear Regression'][i], dict):
+            # 有区间的情况
+            avg_point = np.mean([predictions[m][i]['point'] for m in predictions])
+            avg_lower = np.mean([predictions[m][i].get('lower_95', predictions[m][i]['point']) for m in predictions])
+            avg_upper = np.mean([predictions[m][i].get('upper_95', predictions[m][i]['point']) for m in predictions])
+            avg_uncertainty = np.mean([predictions[m][i].get('uncertainty', 0) for m in predictions])
+            
+            ensemble_preds.append({
+                'point': float(avg_point),
+                'lower_95': float(avg_lower),
+                'upper_95': float(avg_upper),
+                'uncertainty': float(avg_uncertainty)
+            })
+        else:
+            # 无区间的情况（兼容旧格式）
+            avg = np.mean([predictions[m][i]['point'] if isinstance(predictions[m][i], dict) else predictions[m][i] for m in predictions])
+            ensemble_preds.append({'point': float(avg)})
+    
+    # 未来日期
+    future_dates = [(datetime.now() + timedelta(days=i+1)).strftime('%Y-%m-%d') for i in range(7)]
+    
+    # 计算 volatility regime
+    recent_vol = np.std(returns[-20:]) if len(returns) >= 20 else np.std(returns)
+    historical_vol = np.std(returns)
+    vol_regime = 'high' if recent_vol > historical_vol * 1.5 else 'low' if recent_vol < historical_vol * 0.7 else 'normal'
+    
+    # ============ 四层宏观因子调整 ============
+    macro_adjustment = None
+    if COPPER_MACRO_AVAILABLE:
+        print("🌍 启用铜价四层宏观因子调整...")
+        try:
+            macro_system = CopperMacroAdjustmentSystem()
+            # 使用默认宏观数据（实际应用中可从数据库/API获取实时数据）
+            macro_data = get_default_macro_data()
+            macro_result = macro_system.calculate(macro_data)
+            
+            # 应用宏观调整到预测
+            adjustment_pct = macro_result['adjustment']['price_adjustment_pct'] / 100
+            confidence = macro_result['overall_confidence']
+            
+            # 调整预测价格
+            for model_name in predictions:
+                for i, pred in enumerate(predictions[model_name]):
+                    if isinstance(pred, dict):
+                        pred['point'] = pred['point'] * (1 + adjustment_pct * confidence)
+                        pred['lower_95'] = pred.get('lower_95', pred['point']) * (1 + adjustment_pct * confidence * 0.8)
+                        pred['upper_95'] = pred.get('upper_95', pred['point']) * (1 + adjustment_pct * confidence * 1.2)
+                    else:
+                        predictions[model_name][i] = pred * (1 + adjustment_pct * confidence)
+            
+            # 重新计算集成预测
+            ensemble_preds = []
+            for i in range(7):
+                if isinstance(predictions['Linear Regression'][i], dict):
+                    avg_point = np.mean([predictions[m][i]['point'] for m in predictions])
+                    avg_lower = np.mean([predictions[m][i].get('lower_95', predictions[m][i]['point']) for m in predictions])
+                    avg_upper = np.mean([predictions[m][i].get('upper_95', predictions[m][i]['point']) for m in predictions])
+                    avg_uncertainty = np.mean([predictions[m][i].get('uncertainty', 0) for m in predictions])
+                    
+                    ensemble_preds.append({
+                        'point': float(avg_point),
+                        'lower_95': float(avg_lower),
+                        'upper_95': float(avg_upper),
+                        'uncertainty': float(avg_uncertainty)
+                    })
+                else:
+                    avg = np.mean([predictions[m][i] for m in predictions])
+                    ensemble_preds.append({'point': float(avg)})
+            
+            macro_adjustment = {
+                'composite_score': macro_result['composite_score'],
+                'signal': macro_result['signal'],
+                'adjustment_pct': macro_result['adjustment']['price_adjustment_pct'],
+                'confidence': macro_result['overall_confidence'],
+                'layers': macro_result['layers']
+            }
+            
+            print(f"   ✓ 宏观调整: {macro_result['signal']} (得分: {macro_result['composite_score']:+.3f}, 调整: {macro_result['adjustment']['price_adjustment_pct']:+.1f}%)")
+        except Exception as e:
+            print(f"   ⚠️ 宏观因子调整失败: {e}")
+    
+    # 构建基础预测结果（未调整前的原始预测）
+    base_ensemble_price = ensemble_preds[-1]['point'] if isinstance(ensemble_preds[-1], dict) else ensemble_preds[-1]
+    
+    result = {
+        'current_price': current_price,
+        'data_source': df.attrs.get('data_source', 'Unknown'),
+        'contract': df.attrs.get('contract', 'Unknown'),
+        'historical_dates': historical_dates[-30:],
+        'historical_prices': historical_prices[-30:],
+        'returns': returns[-30:].tolist() if len(returns) >= 30 else returns.tolist(),
+        'future_dates': future_dates,
+        'future_predictions': {
+            'Linear Regression': predictions['Linear Regression'],
+            'Random Forest': predictions['Random Forest'],
+            'Ensemble': ensemble_preds
+        },
+        'predictions': {
+            'Linear Regression': predictions['Linear Regression'][-1]['point'] if isinstance(predictions['Linear Regression'][-1], dict) else predictions['Linear Regression'][-1],
+            'Random Forest': predictions['Random Forest'][-1]['point'] if isinstance(predictions['Random Forest'][-1], dict) else predictions['Random Forest'][-1],
+            'Ensemble': ensemble_preds[-1]['point'] if isinstance(ensemble_preds[-1], dict) else ensemble_preds[-1]
+        },
+        'model_performance': {
+            'Linear Regression_R2': model_r2.get('Linear Regression', 0),
+            'Random Forest_R2': model_r2.get('Random Forest', 0)
+        },
+        'volatility_regime': vol_regime,
+        'recent_volatility_annualized': float(recent_vol * np.sqrt(252)),
+        'risk_management_enabled': COPPER_RISK_AVAILABLE,
+        'macro_adjustment_enabled': COPPER_MACRO_AVAILABLE
+    }
+    
+    # 添加风险管理指标
+    if risk_metrics:
+        result['risk_metrics'] = risk_metrics
+    
+    # 添加宏观因子调整指标 - 增强铜价预测
+    if macro_adjustment:
+        result['macro_adjustment'] = macro_adjustment
+        # 添加增强预测对比信息
+        enhanced_price = result['predictions']['Ensemble']
+        adjustment_pct = macro_adjustment['adjustment_pct']
+        # 计算原始预测价格（反向推算）
+        base_price = enhanced_price / (1 + adjustment_pct / 100 * macro_adjustment['confidence'])
+        
+        result['enhanced_prediction'] = {
+            'name': '增强铜价预测',
+            'description': '基于四层宏观因子调整的铜价预测',
+            'current_price': current_price,
+            'base_prediction': float(base_price),  # 原始预测
+            'enhanced_prediction': float(enhanced_price),  # 调整后预测
+            'adjustment_pct': adjustment_pct,
+            'confidence': macro_adjustment['confidence'],
+            'predicted_change_pct': float((enhanced_price - current_price) / current_price * 100),
+            'signal': macro_adjustment['signal'],
+            'composite_score': macro_adjustment['composite_score'],
+            'comparison': {
+                '原始技术预测': float(base_price),
+                '宏观调整后': float(enhanced_price),
+                '调整幅度': f"{adjustment_pct:+.1f}%",
+                '调整方向': '上调' if adjustment_pct > 0 else '下调' if adjustment_pct < 0 else '持平'
+            }
+        }
+    
+    return result
+
+@app.route('/api/copper-prediction')
+def get_copper_prediction():
+    """
+    获取铜价预测
+    
+    返回:
+    - current_price: 当前价格
+    - predictions: 各模型7日后预测价格
+    - future_predictions: 未来7天每日预测
+    - historical_data: 历史价格数据
+    """
+    try:
+        df = get_copper_data()
+        if df is None or df.empty:
+            return jsonify({'error': '无法获取铜价数据'}), 500
+        
+        result = predict_copper_price(df)
+        result['update_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
 
 if __name__ == '__main__':
     import sys

@@ -372,6 +372,7 @@
             <button class="nav-btn active" onclick="showPage('price')">📈 价格预测</button>
             <button class="nav-btn" onclick="showPage('macro')">🌍 宏观预测</button>
             <button class="nav-btn" onclick="showPage('risk')">🛡️ 风险管理</button>
+            <button class="nav-btn" onclick="showPage('copper')">🔶 铜价预测</button>
             <button class="nav-btn" onclick="window.open('/macro', '_blank')">⚙️ 宏观因子可调整预测系统</button>
         </div>
 
@@ -412,6 +413,7 @@
                                 <th>XGBoost</th>
                                 <th>LSTM</th>
                                 <th class="highlight">加权集成</th>
+                                <th>涨跌%</th>
                             </tr>
                         </thead>
                         <tbody id="forecastBody">
@@ -437,6 +439,15 @@
                         <span id="macroSentiment" style="padding: 10px 25px; border-radius: 20px; font-weight: bold;">--</span>
                     </div>
                     <p style="color:#666; margin-top: 15px;">更新时间: <span id="macroUpdateTime">--</span></p>
+                </div>
+
+                <!-- 数据来源图例 -->
+                <div style="display: flex; gap: 12px; margin-bottom: 16px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; align-items: center;">
+                    <span style="font-size: 13px; color: #888;">数据来源:</span>
+                    <span class="data-source-badge" style="background: rgba(0,208,132,0.2); color: #00d084; padding: 4px 10px; border-radius: 12px; font-size: 11px; border: 1px solid rgba(0,208,132,0.3);">🟢 Web Search</span>
+                    <span class="data-source-badge" style="background: rgba(255,193,7,0.2); color: #ffc107; padding: 4px 10px; border-radius: 12px; font-size: 11px; border: 1px solid rgba(255,193,7,0.3);">🟡 API</span>
+                    <span class="data-source-badge" style="background: rgba(108,117,125,0.2); color: #adb5bd; padding: 4px 10px; border-radius: 12px; font-size: 11px; border: 1px solid rgba(108,117,125,0.3);">⚪ 模拟</span>
+                    <span id="dataSourceStats" style="margin-left: auto; font-size: 12px; color: #666;"></span>
                 </div>
 
                 <!-- 9个宏观因子 -->
@@ -597,6 +608,241 @@
                 </div>
             </div>
         </div>
+
+        <!-- 铜价预测页面 -->
+        <div id="copperPage" class="hidden">
+            <div id="copperLoading" class="loading">
+                <div class="spinner"></div>
+                <p style="color:#888;">正在加载铜价数据...</p>
+            </div>
+
+            <div id="copperContent" class="hidden">
+                <div class="price-card" style="background: linear-gradient(135deg, rgba(184, 115, 51, 0.1), rgba(184, 115, 51, 0.05)); border-color: rgba(184, 115, 51, 0.3);">
+                    <div class="price-label">上期所主力合约 CU2604 (RMB/吨)</div>
+                    <div class="price-value" id="copperCurrentPrice" style="color: #B87333;">--</div>
+                    <div class="price-change" id="copperPriceChange">--</div>
+                    <p class="update-time">数据更新时间: <span id="copperUpdateTime">--</span></p>
+                    <button class="btn" onclick="refreshCopperData()" style="margin-top: 20px;">🔄 刷新数据</button>
+                </div>
+
+                <!-- 风险仪表板 -->
+                <div id="copperRiskDashboard" class="hidden" style="margin-bottom: 20px;">
+                    <div class="risk-panel" style="background: rgba(30,30,30,0.5); border: 1px solid rgba(184,115,51,0.3); border-radius: 10px; padding: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h3 style="margin: 0; color: #B87333;">🛡️ 风险仪表板</h3>
+                            <span id="copperRiskBadge" class="badge" style="font-size: 14px;">--</span>
+                        </div>
+                        <div class="metrics" style="grid-template-columns: repeat(4, 1fr);">
+                            <div class="metric-card" style="background: rgba(184,115,51,0.1);">
+                                <div class="metric-title">风险评分</div>
+                                <div class="metric-value" id="copperRiskScore" style="color: #B87333;">--</div>
+                                <div class="metric-sub">综合风险评估</div>
+                            </div>
+                            <div class="metric-card" style="background: rgba(184,115,51,0.1);">
+                                <div class="metric-title">95% VaR</div>
+                                <div class="metric-value" id="copperVaR95">--</div>
+                                <div class="metric-sub">日风险价值</div>
+                            </div>
+                            <div class="metric-card" style="background: rgba(184,115,51,0.1);">
+                                <div class="metric-title">年化波动率</div>
+                                <div class="metric-value" id="copperAnnualVol">--</div>
+                                <div class="metric-sub">波动率状态: <span id="copperVolRegime">--</span></div>
+                            </div>
+                            <div class="metric-card" style="background: rgba(184,115,51,0.1);">
+                                <div class="metric-title">模型置信度</div>
+                                <div class="metric-value" id="copperConfidence">--</div>
+                                <div class="metric-sub">预测区间覆盖率</div>
+                            </div>
+                        </div>
+                        <div id="copperRiskAlerts" style="margin-top: 15px;"></div>
+                        <div id="copperRecommendation" style="margin-top: 10px; padding: 10px; background: rgba(184,115,51,0.1); border-radius: 5px; font-size: 14px; color: #aaa;"></div>
+                    </div>
+                </div>
+
+                <!-- 增强铜价预测 -->
+                <div id="enhancedCopperSection" class="hidden" style="background: linear-gradient(135deg, rgba(184,115,51,0.15) 0%, rgba(184,115,51,0.05) 100%); border: 2px solid #B87333; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                        <span style="font-size: 24px; margin-right: 10px;">🚀</span>
+                        <h3 style="color: #B87333; margin: 0;">增强铜价预测</h3>
+                        <span style="margin-left: 10px; padding: 4px 8px; background: rgba(184,115,51,0.2); border-radius: 4px; font-size: 12px; color: #B87333;">四层宏观因子调整</span>
+                    </div>
+                    <div class="metrics" style="margin-bottom: 15px;">
+                        <div class="metric-card" style="background: rgba(0,0,0,0.2);">
+                            <div class="metric-title">原始技术预测</div>
+                            <div class="metric-value" id="copperBasePred" style="color: #888;">--</div>
+                            <div class="metric-sub">未调整前</div>
+                        </div>
+                        <div class="metric-card" style="background: rgba(184,115,51,0.2); border: 1px solid #B87333;">
+                            <div class="metric-title">🎯 增强预测</div>
+                            <div class="metric-value" id="copperEnhancedPred" style="color: #B87333; font-size: 28px;">--</div>
+                            <div class="metric-sub" id="copperEnhancedChange">--</div>
+                        </div>
+                        <div class="metric-card" style="background: rgba(0,0,0,0.2);">
+                            <div class="metric-title">宏观调整幅度</div>
+                            <div class="metric-value" id="copperAdjustmentPct" style="color: #f59e0b;">--</div>
+                            <div class="metric-sub" id="copperAdjustmentDir">--</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 四层宏观因子 -->
+                    <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 15px;">
+                        <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                            <span style="font-size: 18px; margin-right: 8px;">🌍</span>
+                            <span style="font-weight: 600; color: #ccc;">四层宏观因子分析</span>
+                            <span id="copperSignal" style="margin-left: auto; padding: 4px 12px; border-radius: 4px; font-size: 13px; font-weight: 600;">--</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                            <div class="macro-layer" style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="color: #aaa; font-size: 13px;">🇨🇳 中国实体经济</span>
+                                    <span style="color: #888; font-size: 12px;">权重40%</span>
+                                </div>
+                                <div id="copperLayerChina" style="font-size: 16px; font-weight: 600; margin-top: 5px;">--</div>
+                            </div>
+                            <div class="macro-layer" style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="color: #aaa; font-size: 13px;">💵 美元与流动性</span>
+                                    <span style="color: #888; font-size: 12px;">权重30%</span>
+                                </div>
+                                <div id="copperLayerDollar" style="font-size: 16px; font-weight: 600; margin-top: 5px;">--</div>
+                            </div>
+                            <div class="macro-layer" style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="color: #aaa; font-size: 13px;">🏭 全球工业周期</span>
+                                    <span style="color: #888; font-size: 12px;">权重20%</span>
+                                </div>
+                                <div id="copperLayerIndustrial" style="font-size: 16px; font-weight: 600; margin-top: 5px;">--</div>
+                            </div>
+                            <div class="macro-layer" style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="color: #aaa; font-size: 13px;">⚡ 供应与政策冲击</span>
+                                    <span style="color: #888; font-size: 12px;">权重10%</span>
+                                </div>
+                                <div id="copperLayerSupply" style="font-size: 16px; font-weight: 600; margin-top: 5px;">--</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="color: #888; font-size: 13px;">综合得分</span>
+                                <span id="copperCompositeScore" style="font-size: 18px; font-weight: 700;">--</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px;">
+                                <span style="color: #888; font-size: 13px;">置信度</span>
+                                <span id="copperConfidenceLevel" style="color: #aaa; font-size: 13px;">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 四层宏观因子数据说明 -->
+                <div id="copperMacroFactorsDetail" class="hidden" style="background: rgba(20,20,25,0.8); border: 1px solid rgba(184,115,51,0.3); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; margin-bottom: 20px; justify-content: space-between;">
+                        <div style="display: flex; align-items: center;">
+                            <span style="font-size: 22px; margin-right: 10px;">📊</span>
+                            <h3 style="color: #B87333; margin: 0;">铜价四层宏观因子数据说明</h3>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <span style="font-size: 12px; color: #888;">数据来源:</span>
+                            <span class="data-source-badge" style="background: rgba(0,208,132,0.2); color: #00d084; padding: 4px 10px; border-radius: 12px; font-size: 11px; border: 1px solid rgba(0,208,132,0.3);">🟢 实时</span>
+                            <span class="data-source-badge" style="background: rgba(255,193,7,0.2); color: #ffc107; padding: 4px 10px; border-radius: 12px; font-size: 11px; border: 1px solid rgba(255,193,7,0.3);">🟡 API</span>
+                            <span class="data-source-badge" style="background: rgba(108,117,125,0.2); color: #adb5bd; padding: 4px 10px; border-radius: 12px; font-size: 11px; border: 1px solid rgba(108,117,125,0.3);">⚪ 模拟</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 第一层：中国实体经济 -->
+                    <div style="margin-bottom: 20px; padding: 15px; background: rgba(184,115,51,0.08); border-radius: 8px; border-left: 4px solid #B87333;">
+                        <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                            <span style="font-size: 20px; margin-right: 8px;">🇨🇳</span>
+                            <span style="font-weight: 600; color: #ccc; font-size: 16px;">第一层：中国实体经济</span>
+                            <span style="margin-left: auto; padding: 4px 10px; background: rgba(184,115,51,0.2); border-radius: 4px; font-size: 12px; color: #B87333;">权重 40%</span>
+                        </div>
+                        <div id="chinaFactorsDetail" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                            <!-- 动态填充 -->
+                        </div>
+                    </div>
+                    
+                    <!-- 第二层：美元与流动性 -->
+                    <div style="margin-bottom: 20px; padding: 15px; background: rgba(59,130,246,0.08); border-radius: 8px; border-left: 4px solid #3b82f6;">
+                        <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                            <span style="font-size: 20px; margin-right: 8px;">💵</span>
+                            <span style="font-weight: 600; color: #ccc; font-size: 16px;">第二层：美元与流动性</span>
+                            <span style="margin-left: auto; padding: 4px 10px; background: rgba(59,130,246,0.2); border-radius: 4px; font-size: 12px; color: #3b82f6;">权重 30%</span>
+                        </div>
+                        <div id="dollarFactorsDetail" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                            <!-- 动态填充 -->
+                        </div>
+                    </div>
+                    
+                    <!-- 第三层：全球工业周期 -->
+                    <div style="margin-bottom: 20px; padding: 15px; background: rgba(34,197,94,0.08); border-radius: 8px; border-left: 4px solid #22c55e;">
+                        <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                            <span style="font-size: 20px; margin-right: 8px;">🏭</span>
+                            <span style="font-weight: 600; color: #ccc; font-size: 16px;">第三层：全球工业周期</span>
+                            <span style="margin-left: auto; padding: 4px 10px; background: rgba(34,197,94,0.2); border-radius: 4px; font-size: 12px; color: #22c55e;">权重 20%</span>
+                        </div>
+                        <div id="industrialFactorsDetail" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                            <!-- 动态填充 -->
+                        </div>
+                    </div>
+                    
+                    <!-- 第四层：供应与政策冲击 -->
+                    <div style="margin-bottom: 20px; padding: 15px; background: rgba(245,158,11,0.08); border-radius: 8px; border-left: 4px solid #f59e0b;">
+                        <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                            <span style="font-size: 20px; margin-right: 8px;">⚡</span>
+                            <span style="font-weight: 600; color: #ccc; font-size: 16px;">第四层：供应与政策冲击</span>
+                            <span style="margin-left: auto; padding: 4px 10px; background: rgba(245,158,11,0.2); border-radius: 4px; font-size: 12px; color: #f59e0b;">权重 10%</span>
+                        </div>
+                        <div id="supplyFactorsDetail" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                            <!-- 动态填充 -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="metrics" id="copperMetrics">
+                    <div class="metric-card">
+                        <div class="metric-title">Linear Regression</div>
+                        <div class="metric-value" id="copperLrPred" style="color: #3b82f6">--</div>
+                        <div class="metric-sub" id="copperLrChange">--</div>
+                        <div class="metric-sub" id="copperLrR2" style="font-size: 11px; color: #666;">R²: --</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">Random Forest</div>
+                        <div class="metric-value" id="copperRfPred" style="color: #22c55e">--</div>
+                        <div class="metric-sub" id="copperRfChange">--</div>
+                        <div class="metric-sub" id="copperRfR2" style="font-size: 11px; color: #666;">R²: --</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">集成预测</div>
+                        <div class="metric-value" id="copperEnsemblePred" style="color: #B87333">--</div>
+                        <div class="metric-sub" id="copperEnsembleChange">--</div>
+                        <div class="metric-sub" id="copperEnsembleInterval" style="font-size: 11px; color: #888;">区间: --</div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-title">📈 铜价走势与预测</div>
+                    <canvas id="copperChart"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-title">🔮 未来7天铜价预测（带95%置信区间）</div>
+                    <table class="forecast-table">
+                        <thead>
+                            <tr>
+                                <th>日期</th>
+                                <th>Linear Regression</th>
+                                <th>Random Forest</th>
+                                <th class="highlight">集成预测</th>
+                                <th>95%置信区间</th>
+                                <th>不确定性</th>
+                            </tr>
+                        </thead>
+                        <tbody id="copperForecastBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -612,6 +858,7 @@
             document.getElementById('pricePage').classList.add('hidden');
             document.getElementById('macroPage').classList.add('hidden');
             document.getElementById('riskPage').classList.add('hidden');
+            document.getElementById('copperPage').classList.add('hidden');
             
             if (page === 'price') {
                 document.getElementById('pricePage').classList.remove('hidden');
@@ -622,6 +869,9 @@
             } else if (page === 'risk') {
                 document.getElementById('riskPage').classList.remove('hidden');
                 loadRiskData();
+            } else if (page === 'copper') {
+                document.getElementById('copperPage').classList.remove('hidden');
+                loadCopperData();
             }
         }
 
@@ -682,6 +932,40 @@
             }
         }
 
+        // 获取数据来源徽章
+        function getDataSourceBadge(source) {
+            if (!source) return '<span class="data-source-badge" style="background: rgba(108,117,125,0.2); color: #adb5bd; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px;">⚪ 模拟</span>';
+            
+            // 真实数据源关键词
+            const webSearchKeywords = ['Web Search', '🟢', '常数', 'akshare', 'Yahoo Finance', 'TIPS ETF', 'Caldara-Iacoviello', '上海期货交易所', '新浪财经', 'Breakeven', 'Serper'];
+            const apiKeywords = ['API', '🟡', 'yfinance', 'akshare'];
+            const mockKeywords = ['模拟', '⚪', 'fallback', '默认'];
+            
+            // 检查是否为Web Search/真实数据
+            for (const keyword of webSearchKeywords) {
+                if (source.includes(keyword)) {
+                    return '<span class="data-source-badge" style="background: rgba(0,208,132,0.2); color: #00d084; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px;">🟢 Web</span>';
+                }
+            }
+            
+            // 检查是否为API数据
+            for (const keyword of apiKeywords) {
+                if (source.includes(keyword)) {
+                    return '<span class="data-source-badge" style="background: rgba(255,193,7,0.2); color: #ffc107; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px;">🟡 API</span>';
+                }
+            }
+            
+            // 检查是否为模拟数据
+            for (const keyword of mockKeywords) {
+                if (source.includes(keyword)) {
+                    return '<span class="data-source-badge" style="background: rgba(108,117,125,0.2); color: #adb5bd; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px;">⚪ 模拟</span>';
+                }
+            }
+            
+            // 默认显示为API数据（如果无法识别但非模拟）
+            return '<span class="data-source-badge" style="background: rgba(255,193,7,0.2); color: #ffc107; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px;">🟡 API</span>';
+        }
+
         function updatePriceUI(data) {
             // 安全获取数值
             const currentPrice = data.current_price || 0;
@@ -736,6 +1020,11 @@
             // 更新预测表格
             const tbody = document.getElementById('forecastBody');
             tbody.innerHTML = '';
+            
+            // 获取当前价格作为基准
+            const basePrice = data.current_price || data.prices[data.prices.length - 1];
+            let previousEnsemble = basePrice;
+            
             for (let i = 0; i < data.future_dates.length; i++) {
                 const lr = data.future_predictions['Linear Regression'][i];
                 const rf = data.future_predictions['Random Forest'][i];
@@ -756,6 +1045,18 @@
                 const lstmStr = (lstm !== undefined && lstm !== null) ? '¥' + lstm.toFixed(2) : '-';
                 const ensembleStr = (ensemble !== undefined && ensemble !== null) ? '¥' + ensemble.toFixed(2) : '--';
                 
+                // 计算涨跌百分比（相比前一天）
+                let changePct = 0;
+                if (ensemble !== undefined && ensemble !== null && previousEnsemble > 0) {
+                    changePct = ((ensemble - previousEnsemble) / previousEnsemble) * 100;
+                }
+                const changeColor = changePct > 0 ? '#00d084' : (changePct < 0 ? '#ff4757' : '#888');
+                const changeIcon = changePct > 0 ? '↗' : (changePct < 0 ? '↘' : '→');
+                const changeStr = `${changeIcon} ${changePct > 0 ? '+' : ''}${changePct.toFixed(2)}%`;
+                
+                // 更新前一天的值为当前ensemble值供下次使用
+                previousEnsemble = ensemble;
+                
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${data.future_dates[i]}</td>
@@ -765,6 +1066,7 @@
                     <td style="color: #ef4444">${xgbStr}</td>
                     <td style="color: #a855f7">${lstmStr}</td>
                     <td class="highlight">${ensembleStr}</td>
+                    <td style="color: ${changeColor}; font-weight: 600;">${changeStr}</td>
                 `;
                 tbody.appendChild(row);
             }
@@ -795,26 +1097,49 @@
             const factorsGrid = document.getElementById('factorsGrid');
             factorsGrid.innerHTML = '';
             
+            // 统计数据来源
+            let dataSourceStats = { webSearch: 0, api: 0, mock: 0 };
+            
             for (const [name, factor] of Object.entries(data.factors)) {
+                // 跳过无效的因子数据
+                if (!factor) {
+                    console.warn(`跳过无效的因子: ${name}`);
+                    continue;
+                }
+                
+                // 统计数据来源
+                const source = factor.data_source || '';
+                if (source.includes('Web Search') || source.includes('🟢')) {
+                    dataSourceStats.webSearch++;
+                } else if (source.includes('API') || source.includes('🟡')) {
+                    dataSourceStats.api++;
+                } else {
+                    dataSourceStats.mock++;
+                }
+                
                 const card = document.createElement('div');
                 card.className = 'factor-card';
                 
-                const impactClass = factor.impact === 'positive' ? 'positive' : 'negative';
-                const impactText = factor.impact === 'positive' ? '正向' : '负向';
-                const trendColor = factor.trend === 'up' ? '#00d084' : '#ff4757';
+                const impact = factor.impact || 'positive';
+                const trend = factor.trend || 'stable';
+                const impactClass = impact === 'positive' ? 'positive' : 'negative';
+                const impactText = impact === 'positive' ? '正向' : '负向';
+                const trendColor = trend === 'up' ? '#00d084' : (trend === 'down' ? '#ff4757' : '#888');
+                const dataSourceBadge = getDataSourceBadge(factor.data_source);
                 
                 card.innerHTML = `
                     <div class="factor-header">
                         <div class="factor-name">
                             ${name}
                             <span class="impact-tag ${impactClass}">${impactText}</span>
+                            ${dataSourceBadge}
                         </div>
-                        <div class="factor-weight">权重 ${(factor.weight * 100).toFixed(0)}%</div>
+                        <div class="factor-weight">权重 ${((factor.weight || 0) * 100).toFixed(0)}%</div>
                     </div>
                     <div class="factor-value">
-                        ${typeof factor.raw_value === 'object' ? 
+                        ${factor.raw_value && typeof factor.raw_value === 'object' ? 
                             `${factor.raw_value.gold_silver || '--'} / ${factor.raw_value.copper_gold || '--'}` : 
-                            factor.raw_value}
+                            (factor.raw_value || '--')}
                     </div>
                     <div class="factor-details">
                         <div class="factor-detail">
@@ -831,23 +1156,36 @@
                         </div>
                     </div>
                     <div class="progress-bar">
-                        <div class="progress-fill ${factor.adjusted_score > 5 ? 'positive' : 'negative'}" 
-                             style="width: ${factor.adjusted_score * 10}%"></div>
+                        <div class="progress-fill ${(factor.adjusted_score || 0) > 5 ? 'positive' : 'negative'}" 
+                             style="width: ${Math.min((factor.adjusted_score || 0) * 10, 100)}%"></div>
                     </div>
                     <div style="margin-top: 8px; font-size: 11px; color: #666;">
-                        月度变化: <span style="color: ${factor.change_1m > 0 ? '#00d084' : '#ff4757'}">
-                            ${factor.change_1m > 0 ? '+' : ''}${factor.change_1m}
+                        月度变化: <span style="color: ${(factor.change_1m || 0) > 0 ? '#00d084' : '#ff4757'}">
+                            ${(factor.change_1m || 0) > 0 ? '+' : ''}${(factor.change_1m || 0).toFixed ? (factor.change_1m || 0).toFixed(2) : (factor.change_1m || 0)}
                         </span>
-                        <span style="margin-left: 10px; color: ${trendColor}">${factor.trend === 'up' ? '↗' : '↘'} ${factor.trend === 'up' ? '上升' : '下降'}</span>
+                        <span style="margin-left: 10px; color: ${trendColor}">${trend === 'up' ? '↗' : (trend === 'down' ? '↘' : '→')} ${trend === 'up' ? '上升' : (trend === 'down' ? '下降' : '平稳')}</span>
                     </div>
                 `;
                 factorsGrid.appendChild(card);
             }
             
+            // 显示数据来源统计
+            const totalFactors = Object.keys(data.factors).length;
+            const realDataPercent = ((dataSourceStats.webSearch + dataSourceStats.api) / totalFactors * 100).toFixed(0);
+            console.log(`📊 数据来源统计: Web Search ${dataSourceStats.webSearch}, API ${dataSourceStats.api}, 模拟 ${dataSourceStats.mock} (真实数据 ${realDataPercent}%)`);
+            
+            // 更新页面统计
+            const statsEl = document.getElementById('dataSourceStats');
+            if (statsEl) {
+                statsEl.innerHTML = `真实数据 <span style="color: #00d084; font-weight: bold;">${realDataPercent}%</span>`;
+            }
+            
             // 更新预测
-            const pred = data.prediction;
-            document.getElementById('macroCurrentPrice').textContent = '¥' + pred.current_price.toLocaleString();
-            document.getElementById('macroTargetPrice').textContent = '¥' + pred.target_price.toLocaleString();
+            const pred = data.prediction || {};
+            const currentPrice = pred.current_price || 0;
+            const targetPrice = pred.target_price || 0;
+            document.getElementById('macroCurrentPrice').textContent = '¥' + (currentPrice ? currentPrice.toLocaleString() : '--');
+            document.getElementById('macroTargetPrice').textContent = '¥' + (targetPrice ? targetPrice.toLocaleString() : '--');
             
             const returnEl = document.getElementById('macroExpectedReturn');
             const expectedReturn = (pred.expected_return !== undefined && pred.expected_return !== null) ? pred.expected_return : 0;
@@ -1128,6 +1466,591 @@
         async function refreshData() {
             await fetch('/api/refresh', { method: 'POST' });
             loadPriceData();
+        }
+
+        // 铜价预测相关
+        let copperChart = null;
+
+        async function loadCopperData() {
+            document.getElementById('copperLoading').classList.remove('hidden');
+            document.getElementById('copperContent').classList.add('hidden');
+            
+            try {
+                const response = await fetch('/api/copper-prediction');
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                updateCopperUI(data);
+                document.getElementById('copperLoading').classList.add('hidden');
+                document.getElementById('copperContent').classList.remove('hidden');
+            } catch (error) {
+                console.error('铜价数据加载失败:', error);
+                document.getElementById('copperLoading').innerHTML = '<p style="color:#ff4757;">加载失败: ' + error.message + '</p>';
+            }
+        }
+
+        function updateCopperUI(data) {
+            const currentPrice = data.current_price || 0;
+            document.getElementById('copperCurrentPrice').textContent = '¥' + currentPrice.toLocaleString();
+            document.getElementById('copperUpdateTime').textContent = data.update_time || '--';
+            
+            // 模型性能显示
+            if (data.model_performance) {
+                const lrR2 = data.model_performance['Linear Regression_R2'];
+                const rfR2 = data.model_performance['Random Forest_R2'];
+                if (lrR2 !== undefined) {
+                    document.getElementById('copperLrR2').textContent = `R²: ${(lrR2 * 100).toFixed(1)}%`;
+                }
+                if (rfR2 !== undefined) {
+                    document.getElementById('copperRfR2').textContent = `R²: ${(rfR2 * 100).toFixed(1)}%`;
+                }
+            }
+            
+            // 模型预测（处理新格式）
+            const lrPred = data.predictions?.['Linear Regression'];
+            const rfPred = data.predictions?.['Random Forest'];
+            const ensemblePred = data.predictions?.['Ensemble'];
+            
+            if (lrPred) {
+                const lrVal = typeof lrPred === 'object' ? lrPred.point || lrPred : lrPred;
+                document.getElementById('copperLrPred').textContent = '¥' + lrVal.toLocaleString();
+                const lrChange = ((lrVal - currentPrice) / currentPrice * 100);
+                const lrChangeEl = document.getElementById('copperLrChange');
+                lrChangeEl.textContent = (lrChange >= 0 ? '+' : '') + lrChange.toFixed(2) + '%';
+                lrChangeEl.style.color = lrChange >= 0 ? '#00d084' : '#ff4757';
+            }
+            
+            if (rfPred) {
+                const rfVal = typeof rfPred === 'object' ? rfPred.point || rfPred : rfPred;
+                document.getElementById('copperRfPred').textContent = '¥' + rfVal.toLocaleString();
+                const rfChange = ((rfVal - currentPrice) / currentPrice * 100);
+                const rfChangeEl = document.getElementById('copperRfChange');
+                rfChangeEl.textContent = (rfChange >= 0 ? '+' : '') + rfChange.toFixed(2) + '%';
+                rfChangeEl.style.color = rfChange >= 0 ? '#00d084' : '#ff4757';
+            }
+            
+            if (ensemblePred) {
+                const ensembleVal = typeof ensemblePred === 'object' ? ensemblePred.point || ensemblePred : ensemblePred;
+                document.getElementById('copperEnsemblePred').textContent = '¥' + ensembleVal.toLocaleString();
+                const ensembleChange = ((ensembleVal - currentPrice) / currentPrice * 100);
+                const ensembleChangeEl = document.getElementById('copperEnsembleChange');
+                ensembleChangeEl.textContent = (ensembleChange >= 0 ? '+' : '') + ensembleChange.toFixed(2) + '%';
+                ensembleChangeEl.style.color = ensembleChange >= 0 ? '#00d084' : '#ff4757';
+                
+                // 显示预测区间
+                if (typeof ensemblePred === 'object' && ensemblePred.lower_95 && ensemblePred.upper_95) {
+                    const intervalStr = `[¥${ensemblePred.lower_95.toLocaleString()}, ¥${ensemblePred.upper_95.toLocaleString()}]`;
+                    document.getElementById('copperEnsembleInterval').textContent = intervalStr;
+                }
+            }
+            
+            // 更新增强预测（四层宏观因子）
+            updateEnhancedCopperPrediction(data, currentPrice);
+            
+            // 更新风险仪表板
+            updateCopperRiskDashboard(data);
+            
+            // 7天预测表格（带置信区间）
+            const tbody = document.getElementById('copperForecastBody');
+            tbody.innerHTML = '';
+            if (data.future_dates && data.future_predictions) {
+                for (let i = 0; i < data.future_dates.length; i++) {
+                    const lr = data.future_predictions['Linear Regression']?.[i];
+                    const rf = data.future_predictions['Random Forest']?.[i];
+                    const ensemble = data.future_predictions['Ensemble']?.[i];
+                    
+                    // 提取值（处理对象格式）
+                    const lrVal = lr && typeof lr === 'object' ? lr.point : lr;
+                    const rfVal = rf && typeof rf === 'object' ? rf.point : rf;
+                    const ensembleVal = ensemble && typeof ensemble === 'object' ? ensemble.point : ensemble;
+                    
+                    const lrStr = lrVal ? '¥' + lrVal.toFixed(0) : '--';
+                    const rfStr = rfVal ? '¥' + rfVal.toFixed(0) : '--';
+                    const ensembleStr = ensembleVal ? '¥' + ensembleVal.toFixed(0) : '--';
+                    
+                    // 置信区间
+                    let intervalStr = '--';
+                    let uncertaintyStr = '--';
+                    if (ensemble && typeof ensemble === 'object') {
+                        const lower = ensemble.lower_95;
+                        const upper = ensemble.upper_95;
+                        const uncertainty = ensemble.uncertainty;
+                        if (lower !== undefined && upper !== undefined) {
+                            intervalStr = `¥${lower.toFixed(0)} - ¥${upper.toFixed(0)}`;
+                        }
+                        if (uncertainty !== undefined) {
+                            uncertaintyStr = (uncertainty * 100).toFixed(2) + '%';
+                        }
+                    }
+                    
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${data.future_dates[i]}</td>
+                        <td style="color: #3b82f6">${lrStr}</td>
+                        <td style="color: #22c55e">${rfStr}</td>
+                        <td class="highlight">${ensembleStr}</td>
+                        <td style="font-size: 12px; color: #888;">${intervalStr}</td>
+                        <td style="font-size: 12px; color: #666;">${uncertaintyStr}</td>
+                    `;
+                    tbody.appendChild(row);
+                }
+            }
+            
+            // 绘制图表
+            drawCopperChart(data);
+        }
+        
+        // 更新增强铜价预测（四层宏观因子）
+        function updateEnhancedCopperPrediction(data, currentPrice) {
+            const enhancedSection = document.getElementById('enhancedCopperSection');
+            
+            if (data.enhanced_prediction && data.macro_adjustment) {
+                enhancedSection.classList.remove('hidden');
+                
+                const enhanced = data.enhanced_prediction;
+                const macro = data.macro_adjustment;
+                
+                // 基础预测 vs 增强预测
+                document.getElementById('copperBasePred').textContent = '¥' + enhanced.base_prediction.toLocaleString();
+                document.getElementById('copperEnhancedPred').textContent = '¥' + enhanced.enhanced_prediction.toLocaleString();
+                
+                // 增强预测变化
+                const enhancedChange = ((enhanced.enhanced_prediction - currentPrice) / currentPrice * 100);
+                const enhancedChangeEl = document.getElementById('copperEnhancedChange');
+                enhancedChangeEl.textContent = (enhancedChange >= 0 ? '+' : '') + enhancedChange.toFixed(2) + '%';
+                enhancedChangeEl.style.color = enhancedChange >= 0 ? '#00d084' : '#ff4757';
+                
+                // 调整幅度
+                const adjPct = enhanced.adjustment_pct;
+                document.getElementById('copperAdjustmentPct').textContent = (adjPct >= 0 ? '+' : '') + adjPct.toFixed(1) + '%';
+                document.getElementById('copperAdjustmentPct').style.color = adjPct > 0 ? '#00d084' : adjPct < 0 ? '#ff4757' : '#888';
+                
+                // 调整方向
+                const adjDirEl = document.getElementById('copperAdjustmentDir');
+                adjDirEl.textContent = enhanced.comparison.调整方向;
+                adjDirEl.style.color = adjPct > 0 ? '#00d084' : adjPct < 0 ? '#ff4757' : '#888';
+                
+                // 交易信号
+                const signalEl = document.getElementById('copperSignal');
+                signalEl.textContent = enhanced.signal;
+                if (enhanced.signal.includes('强烈看多')) {
+                    signalEl.style.background = '#00d084';
+                    signalEl.style.color = '#000';
+                } else if (enhanced.signal.includes('看多')) {
+                    signalEl.style.background = 'rgba(0,208,132,0.7)';
+                    signalEl.style.color = '#000';
+                } else if (enhanced.signal.includes('强烈看空')) {
+                    signalEl.style.background = '#ff4757';
+                    signalEl.style.color = '#fff';
+                } else if (enhanced.signal.includes('看空')) {
+                    signalEl.style.background = 'rgba(255,71,87,0.7)';
+                    signalEl.style.color = '#fff';
+                } else {
+                    signalEl.style.background = '#666';
+                    signalEl.style.color = '#fff';
+                }
+                
+                // 各层得分
+                if (macro.layers) {
+                    const layers = macro.layers;
+                    
+                    // 中国实体经济
+                    if (layers.china_real_economy) {
+                        const score = layers.china_real_economy.score;
+                        const el = document.getElementById('copperLayerChina');
+                        el.textContent = (score >= 0 ? '+' : '') + score.toFixed(3);
+                        el.style.color = score > 0.1 ? '#00d084' : score < -0.1 ? '#ff4757' : '#888';
+                    }
+                    
+                    // 美元与流动性
+                    if (layers.dollar_liquidity) {
+                        const score = layers.dollar_liquidity.score;
+                        const el = document.getElementById('copperLayerDollar');
+                        el.textContent = (score >= 0 ? '+' : '') + score.toFixed(3);
+                        el.style.color = score > 0.1 ? '#00d084' : score < -0.1 ? '#ff4757' : '#888';
+                    }
+                    
+                    // 全球工业周期
+                    if (layers.global_industrial) {
+                        const score = layers.global_industrial.score;
+                        const el = document.getElementById('copperLayerIndustrial');
+                        el.textContent = (score >= 0 ? '+' : '') + score.toFixed(3);
+                        el.style.color = score > 0.1 ? '#00d084' : score < -0.1 ? '#ff4757' : '#888';
+                    }
+                    
+                    // 供应与政策冲击
+                    if (layers.supply_policy) {
+                        const score = layers.supply_policy.score;
+                        const el = document.getElementById('copperLayerSupply');
+                        el.textContent = (score >= 0 ? '+' : '') + score.toFixed(3);
+                        el.style.color = score > 0.1 ? '#00d084' : score < -0.1 ? '#ff4757' : '#888';
+                    }
+                }
+                
+                // 综合得分
+                const compositeScore = enhanced.composite_score;
+                const compositeEl = document.getElementById('copperCompositeScore');
+                compositeEl.textContent = (compositeScore >= 0 ? '+' : '') + compositeScore.toFixed(3);
+                compositeEl.style.color = compositeScore > 0.1 ? '#00d084' : compositeScore < -0.1 ? '#ff4757' : '#888';
+                
+                // 置信度
+                document.getElementById('copperConfidenceLevel').textContent = (enhanced.confidence * 100).toFixed(1) + '%';
+                
+                // 更新详细因子数据
+                updateCopperMacroFactorsDetail(data.macro_adjustment);
+                
+            } else {
+                enhancedSection.classList.add('hidden');
+                document.getElementById('copperMacroFactorsDetail').classList.add('hidden');
+            }
+        }
+        
+        // 更新铜价四层宏观因子详细数据
+        function updateCopperMacroFactorsDetail(macro) {
+            const detailSection = document.getElementById('copperMacroFactorsDetail');
+            detailSection.classList.remove('hidden');
+            
+            if (!macro || !macro.layers) return;
+            
+            const layers = macro.layers;
+            
+            // 第一层：中国实体经济
+            if (layers.china_real_economy && layers.china_real_economy.factors) {
+                const container = document.getElementById('chinaFactorsDetail');
+                container.innerHTML = layers.china_real_economy.factors.map(f => {
+                    const sourceBadge = getDataSourceBadge(f.data_source);
+                    return `
+                    <div style="padding: 10px; background: rgba(0,0,0,0.2); border-radius: 6px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: #aaa; font-size: 13px;">${f.name}</span>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                ${sourceBadge}
+                                <span style="color: #888; font-size: 11px;">权重${(f.weight * 100).toFixed(0)}%</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                            <span style="color: #ccc; font-size: 14px;">数值: ${f.value}</span>
+                            <span style="color: ${f.score > 0 ? '#00d084' : f.score < 0 ? '#ff4757' : '#888'}; font-size: 14px; font-weight: 600;">
+                                ${f.score >= 0 ? '+' : ''}${f.score.toFixed(3)}
+                            </span>
+                        </div>
+                        <div style="color: #666; font-size: 11px; margin-top: 4px;">${f.description}</div>
+                    </div>
+                `}).join('');
+            }
+            
+            // 第二层：美元与流动性
+            if (layers.dollar_liquidity && layers.dollar_liquidity.factors) {
+                const container = document.getElementById('dollarFactorsDetail');
+                container.innerHTML = layers.dollar_liquidity.factors.map(f => {
+                    const sourceBadge = getDataSourceBadge(f.data_source);
+                    return `
+                    <div style="padding: 10px; background: rgba(0,0,0,0.2); border-radius: 6px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: #aaa; font-size: 13px;">${f.name}</span>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                ${sourceBadge}
+                                <span style="color: #888; font-size: 11px;">权重${(f.weight * 100).toFixed(0)}%</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                            <span style="color: #ccc; font-size: 14px;">数值: ${f.value}</span>
+                            <span style="color: ${f.score > 0 ? '#00d084' : f.score < 0 ? '#ff4757' : '#888'}; font-size: 14px; font-weight: 600;">
+                                ${f.score >= 0 ? '+' : ''}${f.score.toFixed(3)}
+                            </span>
+                        </div>
+                        <div style="color: #666; font-size: 11px; margin-top: 4px;">${f.description}</div>
+                    </div>
+                `}).join('');
+            }
+            
+            // 第三层：全球工业周期
+            if (layers.global_industrial && layers.global_industrial.factors) {
+                const container = document.getElementById('industrialFactorsDetail');
+                container.innerHTML = layers.global_industrial.factors.map(f => {
+                    const sourceBadge = getDataSourceBadge(f.data_source);
+                    return `
+                    <div style="padding: 10px; background: rgba(0,0,0,0.2); border-radius: 6px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: #aaa; font-size: 13px;">${f.name}</span>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                ${sourceBadge}
+                                <span style="color: #888; font-size: 11px;">权重${(f.weight * 100).toFixed(0)}%</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                            <span style="color: #ccc; font-size: 14px;">数值: ${f.value}</span>
+                            <span style="color: ${f.score > 0 ? '#00d084' : f.score < 0 ? '#ff4757' : '#888'}; font-size: 14px; font-weight: 600;">
+                                ${f.score >= 0 ? '+' : ''}${f.score.toFixed(3)}
+                            </span>
+                        </div>
+                        <div style="color: #666; font-size: 11px; margin-top: 4px;">${f.description}</div>
+                    </div>
+                `}).join('');
+            }
+            
+            // 第四层：供应与政策冲击
+            if (layers.supply_policy && layers.supply_policy.factors) {
+                const container = document.getElementById('supplyFactorsDetail');
+                container.innerHTML = layers.supply_policy.factors.map(f => {
+                    const sourceBadge = getDataSourceBadge(f.data_source);
+                    return `
+                    <div style="padding: 10px; background: rgba(0,0,0,0.2); border-radius: 6px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: #aaa; font-size: 13px;">${f.name}</span>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                ${sourceBadge}
+                                <span style="color: #888; font-size: 11px;">权重${(f.weight * 100).toFixed(0)}%</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                            <span style="color: #ccc; font-size: 14px;">数值: ${f.value}</span>
+                            <span style="color: ${f.score > 0 ? '#00d084' : f.score < 0 ? '#ff4757' : '#888'}; font-size: 14px; font-weight: 600;">
+                                ${f.score >= 0 ? '+' : ''}${f.score.toFixed(3)}
+                            </span>
+                        </div>
+                        <div style="color: #666; font-size: 11px; margin-top: 4px;">${f.description}</div>
+                    </div>
+                `}).join('');
+            }
+        }
+        
+        // 获取数据来源标记HTML
+        function getDataSourceBadge(source) {
+            if (!source) source = '模拟数据';
+            
+            if (source.includes('Web Search')) {
+                return `<span style="background: rgba(0,208,132,0.15); color: #00d084; padding: 2px 6px; border-radius: 4px; font-size: 10px; border: 1px solid rgba(0,208,132,0.3);">🟢 Web</span>`;
+            } else if (source.includes('API')) {
+                return `<span style="background: rgba(255,193,7,0.15); color: #ffc107; padding: 2px 6px; border-radius: 4px; font-size: 10px; border: 1px solid rgba(255,193,7,0.3);">🟡 API</span>`;
+            } else {
+                return `<span style="background: rgba(108,117,125,0.15); color: #adb5bd; padding: 2px 6px; border-radius: 4px; font-size: 10px; border: 1px solid rgba(108,117,125,0.3);">⚪ 模拟</span>`;
+            }
+        }
+        
+        function updateCopperRiskDashboard(data) {
+            // 显示/隐藏风险仪表板
+            const dashboard = document.getElementById('copperRiskDashboard');
+            if (data.risk_metrics && data.risk_management_enabled) {
+                dashboard.classList.remove('hidden');
+                
+                const riskMetrics = data.risk_metrics;
+                
+                // 风险评分
+                if (riskMetrics.dashboard) {
+                    const score = riskMetrics.dashboard.risk_score;
+                    const level = riskMetrics.dashboard.risk_level;
+                    const color = riskMetrics.dashboard.risk_color;
+                    
+                    document.getElementById('copperRiskScore').textContent = score + '/100';
+                    document.getElementById('copperRiskScore').style.color = color;
+                    
+                    const badge = document.getElementById('copperRiskBadge');
+                    badge.textContent = level;
+                    badge.style.background = color;
+                    badge.style.color = '#000';
+                    
+                    // 预警
+                    const alertsDiv = document.getElementById('copperRiskAlerts');
+                    alertsDiv.innerHTML = '';
+                    if (riskMetrics.dashboard.key_alerts && riskMetrics.dashboard.key_alerts.length > 0) {
+                        riskMetrics.dashboard.key_alerts.forEach(alert => {
+                            const alertDiv = document.createElement('div');
+                            alertDiv.className = `alert alert-${alert.level}`;
+                            alertDiv.style.padding = '8px 12px';
+                            alertDiv.style.marginBottom = '5px';
+                            alertDiv.style.borderRadius = '5px';
+                            alertDiv.style.fontSize = '13px';
+                            alertDiv.textContent = '⚠️ ' + alert.message;
+                            alertsDiv.appendChild(alertDiv);
+                        });
+                    }
+                    
+                    // 建议
+                    if (riskMetrics.dashboard.recommendation) {
+                        document.getElementById('copperRecommendation').textContent = 
+                            '💡 ' + riskMetrics.dashboard.recommendation;
+                    }
+                }
+                
+                // VaR
+                if (riskMetrics.evt) {
+                    const var95 = riskMetrics.evt.VaR_95;
+                    if (var95 !== undefined) {
+                        const varEl = document.getElementById('copperVaR95');
+                        varEl.textContent = (var95 * 100).toFixed(2) + '%';
+                        varEl.style.color = var95 < -0.03 ? '#ff4757' : var95 < -0.02 ? '#f59e0b' : '#00d084';
+                    }
+                }
+                
+                // 波动率
+                if (data.recent_volatility_annualized) {
+                    document.getElementById('copperAnnualVol').textContent = 
+                        (data.recent_volatility_annualized * 100).toFixed(1) + '%';
+                    document.getElementById('copperVolRegime').textContent = 
+                        data.volatility_regime === 'high' ? '高' : 
+                        data.volatility_regime === 'low' ? '低' : '正常';
+                }
+                
+                // 模型置信度
+                if (data.future_predictions?.Ensemble?.[0]) {
+                    const firstPred = data.future_predictions.Ensemble[0];
+                    if (firstPred && typeof firstPred === 'object' && firstPred.uncertainty !== undefined) {
+                        const confidence = Math.max(0, 100 - firstPred.uncertainty * 1000);
+                        document.getElementById('copperConfidence').textContent = confidence.toFixed(0) + '%';
+                    }
+                }
+            } else {
+                dashboard.classList.add('hidden');
+            }
+        }
+
+        function drawCopperChart(data) {
+            const ctx = document.getElementById('copperChart').getContext('2d');
+            if (copperChart) copperChart.destroy();
+            
+            const histDates = data.historical_dates?.slice(-15) || [];
+            const histPrices = data.historical_prices?.slice(-15) || [];
+            const futureDates = data.future_dates || [];
+            const futurePreds = data.future_predictions?.['Ensemble'] || [];
+            
+            const allDates = [...histDates, ...futureDates];
+            const histData = [...histPrices, ...new Array(futureDates.length).fill(null)];
+            
+            // 处理预测数据（支持带区间的对象格式）
+            const predPoints = futurePreds.map(p => p && typeof p === 'object' ? p.point : p);
+            const predData = [...new Array(histDates.length).fill(null), ...predPoints];
+            
+            // 准备置信区间数据
+            let upper95Data = [...new Array(allDates.length).fill(null)];
+            let lower95Data = [...new Array(allDates.length).fill(null)];
+            
+            const hasIntervals = futurePreds.length > 0 && 
+                                 futurePreds[0] && 
+                                 typeof futurePreds[0] === 'object' &&
+                                 futurePreds[0].upper_95 !== undefined;
+            
+            if (hasIntervals) {
+                const upperValues = futurePreds.map(p => p.upper_95);
+                const lowerValues = futurePreds.map(p => p.lower_95);
+                
+                // 从历史最后一个点开始填充，形成连续区间
+                const lastHistPrice = histPrices[histPrices.length - 1];
+                upper95Data = [
+                    ...new Array(histDates.length - 1).fill(null),
+                    lastHistPrice,  // 从当前价格开始
+                    ...upperValues
+                ];
+                lower95Data = [
+                    ...new Array(histDates.length - 1).fill(null),
+                    lastHistPrice,  // 从当前价格开始
+                    ...lowerValues
+                ];
+            }
+            
+            const datasets = [
+                {
+                    label: '历史价格',
+                    data: histData,
+                    borderColor: '#B87333',
+                    backgroundColor: 'rgba(184, 115, 51, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 3
+                }
+            ];
+            
+            // 如果有置信区间，添加区间填充
+            if (hasIntervals) {
+                datasets.push({
+                    label: '95%置信区间上限',
+                    data: upper95Data,
+                    borderColor: 'rgba(0, 208, 132, 0.3)',
+                    backgroundColor: 'transparent',
+                    borderWidth: 1,
+                    borderDash: [3, 3],
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.4
+                });
+                
+                datasets.push({
+                    label: '95%置信区间下限',
+                    data: lower95Data,
+                    borderColor: 'rgba(0, 208, 132, 0.3)',
+                    backgroundColor: 'rgba(0, 208, 132, 0.1)',
+                    borderWidth: 1,
+                    borderDash: [3, 3],
+                    pointRadius: 0,
+                    fill: '-1',  // 填充到上一个数据集
+                    tension: 0.4
+                });
+            }
+            
+            // 添加预测线
+            datasets.push({
+                label: '预测价格',
+                data: predData,
+                borderColor: '#00d084',
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                borderDash: [5, 5],
+                fill: false,
+                tension: 0.4,
+                pointRadius: 4,
+                pointBackgroundColor: '#00d084'
+            });
+            
+            copperChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: allDates,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#aaa' },
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += '¥' + context.parsed.y.toLocaleString();
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            ticks: { color: '#888', maxRotation: 45, minRotation: 45 }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            ticks: { color: '#888', callback: v => '¥' + v.toLocaleString() }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function refreshCopperData() {
+            await fetch('/api/refresh', { method: 'POST' });
+            loadCopperData();
         }
 
         // 初始加载

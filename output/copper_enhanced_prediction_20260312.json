@@ -1,0 +1,324 @@
+{
+  "timestamp": "2026-03-12T15:07:37.777742",
+  "current_price": 101150.0,
+  "forecast_horizon_days": 7,
+  "base_prediction": {
+    "method": "ensemble_ml",
+    "point_forecast": 103423.33011882022,
+    "forecast_path": [
+      103413.76085368004,
+      103422.98423881299,
+      103423.31761704627,
+      103423.32966696555,
+      103423.33010250855,
+      103423.33011825121,
+      103423.33011882022
+    ],
+    "predicted_change_pct": 2.2474840522196904,
+    "direction": "up",
+    "model_details": {
+      "linear_reg_final": 105331.86023764043,
+      "random_forest_final": 101514.8
+    }
+  },
+  "macro_adjustment": {
+    "timestamp": "2026-03-12T15:07:37.436246",
+    "composite_score": -0.15593333333333337,
+    "overall_confidence": 0.753125,
+    "signal": "中性",
+    "adjustment": {
+      "price_adjustment_pct": -2.35,
+      "position_sizing_factor": 0.99,
+      "confidence_adjusted": 0.75
+    },
+    "layers": {
+      "china_real_economy": {
+        "name": "中国实体经济",
+        "weight": 0.4,
+        "score": -0.07279166666666652,
+        "confidence": 0.7749999999999999,
+        "factors": [
+          {
+            "name": "房地产周期",
+            "value": -12.47,
+            "weight": 0.15,
+            "direction": "BEARISH",
+            "score": -0.623,
+            "leading_months": 4,
+            "confidence": 0.75,
+            "description": "新开工-19.4%, 竣工-10.0% (领先3-6个月, 地产用铜占中国需求25-30%)",
+            "data_source": "Web Search"
+          },
+          {
+            "name": "基建投资",
+            "value": 6.35,
+            "weight": 0.1,
+            "direction": "BULLISH",
+            "score": 0.423,
+            "leading_months": 0,
+            "confidence": 0.8,
+            "description": "电网投资+8.5%, 交运+4.2% (电网用铜占中国需求15-18%)",
+            "data_source": "模拟数据"
+          },
+          {
+            "name": "制造业PMI",
+            "value": 50.7,
+            "weight": 0.08,
+            "direction": "NEUTRAL",
+            "score": 0.14,
+            "leading_months": 0,
+            "confidence": 0.85,
+            "description": "官方PMI:50.2, 财新PMI:51.2 (工业产出前瞻指标)",
+            "data_source": "Web Search"
+          },
+          {
+            "name": "信贷脉冲",
+            "value": 3.1,
+            "weight": 0.07,
+            "direction": "NEUTRAL",
+            "score": 0.155,
+            "leading_months": 2,
+            "confidence": 0.7,
+            "description": "社融增速+9.5%, M1-M2剪刀差-3.2% (领先2-3个月, 流动性→投资→铜需求)",
+            "data_source": "模拟数据"
+          }
+        ]
+      },
+      "dollar_liquidity": {
+        "name": "美元与流动性",
+        "weight": 0.3,
+        "score": -0.3071666666666667,
+        "confidence": 0.7749999999999999,
+        "factors": [
+          {
+            "name": "美元指数",
+            "value": 103.5,
+            "weight": 0.15,
+            "direction": "NEUTRAL",
+            "score": -0.24,
+            "leading_months": 0,
+            "confidence": 0.85,
+            "description": "DXY:103.50, 3月变化+1.2% (负相关-0.80, 定价货币效应)",
+            "data_source": "Web Search"
+          },
+          {
+            "name": "实际利率",
+            "value": 1.8,
+            "weight": 0.08,
+            "direction": "NEUTRAL",
+            "score": -0.4,
+            "leading_months": 0,
+            "confidence": 0.8,
+            "description": "10Y TIPS:1.80% (负相关-0.65, 持有成本+机会成本)",
+            "data_source": "模拟数据"
+          },
+          {
+            "name": "美联储政策",
+            "value": 4.38,
+            "weight": 0.04,
+            "direction": "NEUTRAL",
+            "score": -0.698,
+            "leading_months": 3,
+            "confidence": 0.75,
+            "description": "联邦基金利率:4.38%, 缩表进度65% (中期主导, 全球流动性总闸门)",
+            "data_source": "Web Search"
+          },
+          {
+            "name": "离岸美元流动性",
+            "value": 15.0,
+            "weight": 0.03,
+            "direction": "NEUTRAL",
+            "score": 0.125,
+            "leading_months": 0,
+            "confidence": 0.7,
+            "description": "SOFR-OIS:12bp, FRA-OIS:18bp (危机时飙升, 美元融资紧张度)",
+            "data_source": "模拟数据"
+          }
+        ]
+      },
+      "global_industrial": {
+        "name": "全球工业周期",
+        "weight": 0.2,
+        "score": -0.022500000000000374,
+        "confidence": 0.7499999999999999,
+        "factors": [
+          {
+            "name": "全球制造业PMI",
+            "value": 50.3,
+            "weight": 0.08,
+            "direction": "NEUTRAL",
+            "score": 0.1,
+            "leading_months": 0,
+            "confidence": 0.85,
+            "description": "JPM全球制造业PMI:50.3 (全球, 有效性:高)",
+            "data_source": "模拟数据"
+          },
+          {
+            "name": "美国ISM制造业",
+            "value": 50.3,
+            "weight": 0.05,
+            "direction": "NEUTRAL",
+            "score": -0.05,
+            "leading_months": 0,
+            "confidence": 0.8,
+            "description": "ISM:50.3, 新订单:49.2 (北美, 有效性:中高)",
+            "data_source": "模拟数据"
+          },
+          {
+            "name": "欧元区工业产出",
+            "value": -1.5,
+            "weight": 0.04,
+            "direction": "NEUTRAL",
+            "score": -0.3,
+            "leading_months": 1,
+            "confidence": 0.7,
+            "description": "Eurostat工业生产同比:-1.5% (欧洲, 有效性:中等)",
+            "data_source": "模拟数据"
+          },
+          {
+            "name": "库存周期",
+            "value": 1.38,
+            "weight": 0.03,
+            "direction": "NEUTRAL",
+            "score": 0.067,
+            "leading_months": -1,
+            "confidence": 0.65,
+            "description": "美国制造商库存销售比:1.38 (滞后确认指标)",
+            "data_source": "模拟数据"
+          }
+        ]
+      },
+      "supply_policy": {
+        "name": "供应与政策冲击",
+        "weight": 0.1,
+        "score": -0.30166666666666664,
+        "confidence": 0.7125000000000001,
+        "factors": [
+          {
+            "name": "铜精矿供应",
+            "value": 85,
+            "weight": 0.04,
+            "direction": "BEARISH",
+            "score": -0.7,
+            "leading_months": 0,
+            "confidence": 0.75,
+            "description": "TC/RC:85.0$/吨 (月度, 冲击强度高, 2024年TC跌至负值)",
+            "data_source": "Web Search"
+          },
+          {
+            "name": "地缘与政策",
+            "value": 3.5,
+            "weight": 0.03,
+            "direction": "NEUTRAL",
+            "score": -0.3,
+            "leading_months": 0,
+            "confidence": 0.6,
+            "description": "罢工风险:4/10, 政策风险:3/10 (事件驱动, 冲击强度极高)",
+            "data_source": "模拟数据"
+          },
+          {
+            "name": "库存水平",
+            "value": 4.5,
+            "weight": 0.02,
+            "direction": "NEUTRAL",
+            "score": 0.167,
+            "leading_months": 0,
+            "confidence": 0.8,
+            "description": "全球显性库存可用天数:4.5天 (周度, 验证供需)",
+            "data_source": "模拟数据"
+          },
+          {
+            "name": "碳政策",
+            "value": 3.5,
+            "weight": 0.01,
+            "direction": "NEUTRAL",
+            "score": 0.35,
+            "leading_months": 6,
+            "confidence": 0.7,
+            "description": "CBAM成本影响:3.0%, 中国能耗双控:4.0% (季度, 长期结构性)",
+            "data_source": "模拟数据"
+          }
+        ]
+      }
+    }
+  },
+  "risk_metrics": {
+    "price_stats": {
+      "current_price": 101150.0,
+      "price_volatility": 0.20192022622267963,
+      "daily_volatility": 0.012719778649026509,
+      "skewness": 0.5912623956123272,
+      "kurtosis": 7.398774269200782
+    },
+    "extreme_movements": {
+      "max_daily_gain": 0.06613756613756605,
+      "max_daily_loss": -0.05409047160731473,
+      "days_above_2std": 10
+    },
+    "tail_risk": {
+      "VaR_95": 0.0449582223026531,
+      "CVaR_95": 0.11818509509717548,
+      "VaR_99": 0.06422603186093301,
+      "CVaR_99": 0.16883585013882213,
+      "extreme_index": 0.6204614857907844,
+      "tail_risk_level": "high",
+      "threshold": 0.023609652814696756
+    },
+    "model_consensus": {
+      "mean_prediction": 103423.33011882022,
+      "std_prediction": 0.0,
+      "min_prediction": 103423.33011882022,
+      "max_prediction": 103423.33011882022,
+      "consensus_strength": 1.0
+    },
+    "risk_score": 65,
+    "prediction_intervals": {
+      "point_prediction": [
+        98172.37200083095
+      ],
+      "mean_prediction": [
+        98172.37200083095
+      ],
+      "lower_95": [
+        91101.92315986306
+      ],
+      "upper_95": [
+        101432.72888929292
+      ],
+      "lower_50": [
+        101042.97357331589
+      ],
+      "upper_50": [
+        101515.61803790921
+      ],
+      "prediction_interval_width": [
+        10330.805729429863
+      ],
+      "uncertainty_score": [
+        0.10523129388523303
+      ],
+      "confidence": [
+        0.0
+      ],
+      "method": "quantile_regression"
+    }
+  },
+  "final_prediction": {
+    "current_price": 101150.0,
+    "base_forecast": 103423.33011882022,
+    "macro_adjusted_forecast": 100992.88186102794,
+    "final_forecast_range": {
+      "point_estimate": 100992.88186102794,
+      "lower_95": 91101.92315986306,
+      "upper_95": 101432.72888929292
+    },
+    "predicted_change": {
+      "total_pct": -0.15533182300747272,
+      "macro_adjustment_pct": -2.35
+    },
+    "macro_signal": "中性",
+    "macro_score": -0.15593333333333337,
+    "uncertainty": 0.10523129388523303,
+    "confidence_level": "95%"
+  }
+}

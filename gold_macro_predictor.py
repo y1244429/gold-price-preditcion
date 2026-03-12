@@ -33,10 +33,13 @@ class MacroDataCollector:
                 'change_1m': round((df['Close'].iloc[-1] - df['Close'].iloc[-20]) / df['Close'].iloc[-20] * 100, 2),
                 'trend': 'up' if df['Close'].iloc[-1] > df['Close'].iloc[-20] else 'down',
                 'weight': 0.15,
-                'impact': 'negative'  # 美元强则黄金弱
+                'impact': 'negative',  # 美元强则黄金弱
+                'data_source': '🟡 API (Yahoo Finance)'
             }
         except:
-            return self._mock_data('DXY', 103.5, 0.15, 'negative')
+            data = self._mock_data('DXY', 103.5, 0.15, 'negative')
+            data['data_source'] = '⚪ 模拟数据'
+            return data
     
     def get_real_rate(self):
         """2. 实际利率 (10年期TIPS)"""
@@ -50,27 +53,26 @@ class MacroDataCollector:
                 'change_1m': round((tnx['Close'].iloc[-1] - tnx['Close'].iloc[-20]), 2),
                 'trend': 'up' if real_rate > 0 else 'down',
                 'weight': 0.30,
-                'impact': 'negative'  # 实际利率高则黄金弱
+                'impact': 'negative',  # 实际利率高则黄金弱
+                'data_source': '🟡 API (Yahoo Finance)'
             }
         except:
-            return self._mock_data('实际利率', 1.5, 0.30, 'negative')
+            data = self._mock_data('实际利率', 1.5, 0.30, 'negative')
+            data['data_source'] = '⚪ 模拟数据'
+            return data
     
     def get_inflation_expectation(self):
-        """3. 通胀预期 (10Y Breakeven)"""
-        try:
-            # 使用TIP与国债利差作为通胀预期代理
-            tnx = yf.Ticker("^TNX").history(period="1y")
-            # 简化计算：假设通胀预期
-            inflation = 2.5 + np.random.randn() * 0.3
-            return {
-                'value': round(inflation, 2),
-                'change_1m': round(np.random.randn() * 0.2, 2),
-                'trend': 'up' if inflation > 2.5 else 'down',
-                'weight': 0.05,
-                'impact': 'positive'  # 通胀高则黄金强
-            }
-        except:
-            return self._mock_data('通胀预期', 2.5, 0.05, 'positive')
+        """3. 通胀预期 (CPI) - 使用固定值3.4%"""
+        # 使用CPI作为通胀预期代理，固定值3.4%
+        inflation = 3.4
+        return {
+            'value': inflation,
+            'change_1m': 0.0,  # 固定值无月度变化
+            'trend': 'stable',  # 固定值趋势平稳
+            'weight': 0.05,
+            'impact': 'positive',  # 通胀高则黄金强
+            'data_source': '🟢 常数数据 (CPI 3.4%)'
+        }
     
     def get_bond_yield(self):
         """4. 美债收益率 (10年期)"""
@@ -82,10 +84,13 @@ class MacroDataCollector:
                 'change_1m': round((df['Close'].iloc[-1] - df['Close'].iloc[-20]), 2),
                 'trend': 'up' if df['Close'].iloc[-1] > df['Close'].iloc[-20] else 'down',
                 'weight': 0.10,
-                'impact': 'negative'  # 收益率高则黄金弱
+                'impact': 'negative',  # 收益率高则黄金弱
+                'data_source': '🟡 API (Yahoo Finance)'
             }
         except:
-            return self._mock_data('美债收益率', 4.2, 0.10, 'negative')
+            data = self._mock_data('美债收益率', 4.2, 0.10, 'negative')
+            data['data_source'] = '⚪ 模拟数据'
+            return data
     
     def get_geopolitical_risk(self):
         """5. 地缘政治风险指数 (GPR)"""
@@ -98,10 +103,13 @@ class MacroDataCollector:
                 'change_1m': round((vix['Close'].iloc[-1] - vix['Close'].iloc[-20]) / 10, 1),
                 'trend': 'up' if gpr > 2 else 'down',
                 'weight': 0.20,
-                'impact': 'positive'  # 风险高则黄金强
+                'impact': 'positive',  # 风险高则黄金强
+                'data_source': '🟡 API (VIX代理 - Yahoo Finance)'
             }
         except:
-            return self._mock_data('地缘风险', 5.5, 0.20, 'positive')
+            data = self._mock_data('地缘风险', 5.5, 0.20, 'positive')
+            data['data_source'] = '⚪ 模拟数据'
+            return data
     
     def get_vix(self):
         """6. 市场波动率 (VIX)"""
@@ -113,10 +121,13 @@ class MacroDataCollector:
                 'change_1m': round((df['Close'].iloc[-1] - df['Close'].iloc[-20]), 2),
                 'trend': 'up' if df['Close'].iloc[-1] > 20 else 'down',
                 'weight': 0.05,
-                'impact': 'positive'  # 波动率高则黄金强
+                'impact': 'positive',  # 波动率高则黄金强
+                'data_source': '🟡 API (Yahoo Finance)'
             }
         except:
-            return self._mock_data('VIX', 18.5, 0.05, 'positive')
+            data = self._mock_data('VIX', 18.5, 0.05, 'positive')
+            data['data_source'] = '⚪ 模拟数据'
+            return data
     
     def get_economic_uncertainty(self):
         """7. 经济不确定性 (使用经济数据波动)"""
@@ -129,10 +140,13 @@ class MacroDataCollector:
                 'change_1m': round(np.random.randn() * 2, 2),
                 'trend': 'up' if volatility > 15 else 'down',
                 'weight': 0.01,
-                'impact': 'positive'  # 不确定性高则黄金强
+                'impact': 'positive',  # 不确定性高则黄金强
+                'data_source': '🟡 API (标普500波动率计算)'
             }
         except:
-            return self._mock_data('经济不确定性', 15.0, 0.01, 'positive')
+            data = self._mock_data('经济不确定性', 15.0, 0.01, 'positive')
+            data['data_source'] = '⚪ 模拟数据'
+            return data
     
     def get_etf_holdings(self):
         """8. ETF持仓 (GLD等)"""
@@ -145,10 +159,13 @@ class MacroDataCollector:
                 'change_1m': round(holdings_change, 2),
                 'trend': 'up' if holdings_change > 0 else 'down',
                 'weight': 0.09,
-                'impact': 'positive'  # 持仓增则黄金强
+                'impact': 'positive',  # 持仓增则黄金强
+                'data_source': '🟡 API (GLD价格推算 - Yahoo Finance)'
             }
         except:
-            return self._mock_data('ETF持仓', 850, 0.09, 'positive')
+            data = self._mock_data('ETF持仓', 850, 0.09, 'positive')
+            data['data_source'] = '⚪ 模拟数据'
+            return data
     
     def get_gold_ratios(self):
         """9. 金银比/铜金比"""
@@ -166,7 +183,8 @@ class MacroDataCollector:
                 'change_1m': round((gold_silver_ratio - gold['Close'].iloc[-20] / silver['Close'].iloc[-20]), 1),
                 'trend': 'up' if gold_silver_ratio > 80 else 'down',
                 'weight': 0.05,
-                'impact': 'positive'  # 金银比高说明黄金相对强
+                'impact': 'positive',  # 金银比高说明黄金相对强
+                'data_source': '🟡 API (Yahoo Finance)'
             }
         except:
             return {
@@ -176,7 +194,8 @@ class MacroDataCollector:
                 'change_1m': 1.2,
                 'trend': 'up',
                 'weight': 0.05,
-                'impact': 'positive'
+                'impact': 'positive',
+                'data_source': '⚪ 模拟数据'
             }
     
     def _mock_data(self, name, base_value, weight, impact):
@@ -186,7 +205,8 @@ class MacroDataCollector:
             'change_1m': round(np.random.randn() * 2, 2),
             'trend': 'up' if np.random.random() > 0.5 else 'down',
             'weight': weight,
-            'impact': impact
+            'impact': impact,
+            'data_source': '⚪ 模拟数据'
         }
     
     def get_all_factors(self):
@@ -250,7 +270,8 @@ class FactorScorer:
                 'weight': data['weight'],
                 'impact': data['impact'],
                 'trend': data['trend'],
-                'change_1m': data['change_1m']
+                'change_1m': data['change_1m'],
+                'data_source': data.get('data_source', '⚪ 模拟数据')
             }
             
             total_score += weighted_score
@@ -393,23 +414,47 @@ def predict_gold_price(factors, scores, total_score):
             'expected_return': round(expected_change * 100, 2),
             'target_price': round(current_price * (1 + expected_change), 2)
         }
-    except Exception as e:
-        print(f"⚠️ 预测计算出错: {e}, 使用默认值")
-        # 使用上期所实际价格作为默认值
-        current_price = 1157.0
-        contract = "AU2604"
-        predictions = [round(current_price + i * 0.5 + np.random.randn() * 2, 2) for i in range(1, 31)]
-        dates = [(datetime.now() + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(1, 31)]
-        return {
-            'current_price': current_price,
-            'current_price_source': '上海期货交易所(默认)',
-            'current_price_contract': contract,
-            'predictions': predictions,
-            'dates': dates,
-            'sentiment': '中性偏多',
-            'expected_return': 2.5,
-            'target_price': round(current_price * 1.025, 2)
-        }
+    
+    # 如果成功获取了current_price（不为None），也需要返回数据
+    # 基于总分预测涨跌
+    if total_score > 6.5:
+        sentiment = '强烈看涨'
+        expected_change = np.random.uniform(0.03, 0.08)
+    elif total_score > 5.5:
+        sentiment = '看涨'
+        expected_change = np.random.uniform(0.01, 0.03)
+    elif total_score > 4.5:
+        sentiment = '中性'
+        expected_change = np.random.uniform(-0.01, 0.01)
+    elif total_score > 3.5:
+        sentiment = '看跌'
+        expected_change = np.random.uniform(-0.03, -0.01)
+    else:
+        sentiment = '强烈看跌'
+        expected_change = np.random.uniform(-0.08, -0.03)
+    
+    # 生成预测路径
+    predictions = []
+    dates = []
+    for i in range(1, 31):
+        date = datetime.now() + timedelta(days=i)
+        dates.append(date.strftime('%Y-%m-%d'))
+        
+        # 添加随机波动
+        daily_change = expected_change / 30 + np.random.randn() * 0.005
+        pred_price = current_price * (1 + daily_change * i)
+        predictions.append(round(pred_price, 2))
+    
+    return {
+        'current_price': round(current_price, 2),
+        'current_price_source': price_source,
+        'current_price_contract': contract,
+        'predictions': predictions,
+        'dates': dates,
+        'sentiment': sentiment,
+        'expected_return': round(expected_change * 100, 2),
+        'target_price': round(current_price * (1 + expected_change), 2)
+    }
 
 
 # ============ Flask路由 ============

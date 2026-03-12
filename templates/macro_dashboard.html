@@ -391,7 +391,7 @@
                 currentData = data;
                 // 保存从服务器获取的默认权重
                 for (const [name, factor] of Object.entries(data.factors)) {
-                    defaultWeights[name] = factor.weight;
+                    defaultWeights[name] = factor.weight || 0;
                 }
                 customWeights = {...defaultWeights};
                 
@@ -419,14 +419,15 @@
             const sortedFactors = Object.entries(factors).sort((a, b) => b[1].weight - a[1].weight);
             
             for (const [name, factor] of sortedFactors) {
+                const weight = factor.weight || 0;
                 const item = document.createElement('div');
                 item.className = 'weight-item';
                 item.innerHTML = `
                     <div class="weight-item-header">
                         <span class="weight-item-name">${name}</span>
-                        <span class="weight-item-value" id="weight-value-${name}">${(factor.weight * 100).toFixed(0)}%</span>
+                        <span class="weight-item-value" id="weight-value-${name}">${(weight * 100).toFixed(0)}%</span>
                     </div>
-                    <input type="range" class="weight-slider" min="0" max="50" value="${(factor.weight * 100).toFixed(0)}"
+                    <input type="range" class="weight-slider" min="0" max="50" value="${(weight * 100).toFixed(0)}"
                            id="weight-slider-${name}" oninput="updateWeight('${name}', this.value)">
                 `;
                 container.appendChild(item);
@@ -472,8 +473,9 @@
             const updatedFactors = {};
             
             for (const [name, factor] of Object.entries(currentData.factors)) {
-                const newWeight = customWeights[name] || factor.weight;
-                const newWeightedScore = factor.adjusted_score * newWeight;
+                const newWeight = customWeights[name] || factor.weight || 0;
+                const adjustedScore = factor.adjusted_score || 0;
+                const newWeightedScore = adjustedScore * newWeight;
                 
                 updatedFactors[name] = {
                     ...factor,
@@ -503,7 +505,7 @@
             }
             
             // 基于新的综合得分重新计算预测价格
-            const currentPrice = currentData.prediction.current_price;
+            const currentPrice = (currentData.prediction && currentData.prediction.current_price) || 0;
             const dailyDrift = expectedChange / 30;
             const dailyVolatility = 0.15 / Math.sqrt(252); // 默认15%年化波动率
             
@@ -511,9 +513,14 @@
             const newDates = [];
             let currentPred = currentPrice;
             
-            for (let i = 1; i <= 30; i++) {
-                const date = new Date();
-                date.setDate(date.getDate() + i);
+            // 使用原始数据的起始日期，或今天
+            const baseDate = (currentData.prediction && currentData.prediction.dates && currentData.prediction.dates.length > 0)
+                ? new Date(currentData.prediction.dates[0]) 
+                : new Date();
+            
+            for (let i = 0; i < 30; i++) {
+                const date = new Date(baseDate);
+                date.setDate(baseDate.getDate() + i);
                 newDates.push(date.toISOString().split('T')[0]);
                 
                 // 随机游走: r = drift + volatility * Z
@@ -579,8 +586,9 @@
 
         function updateUI(data) {
             // 更新总分
-            document.getElementById('totalScore').textContent = data.total_score.toFixed(2);
-            document.getElementById('updateTime').textContent = data.update_time;
+            const totalScore = data.total_score || 0;
+            document.getElementById('totalScore').textContent = totalScore.toFixed(2);
+            document.getElementById('updateTime').textContent = data.update_time || '--';
             
             // 更新情绪标签
             const sentimentEl = document.getElementById('sentiment');
@@ -602,10 +610,20 @@
                 const card = document.createElement('div');
                 card.className = 'factor-card';
                 
-                const impactClass = factor.impact === 'positive' ? 'positive' : 'negative';
-                const impactText = factor.impact === 'positive' ? '正向' : '负向';
-                const trendIcon = factor.trend === 'up' ? '↗' : '↘';
-                const trendColor = factor.trend === 'up' ? '#00d084' : '#ff4757';
+                // 处理可能为 null 的值，提供默认值
+                const impact = factor.impact || 'positive';
+                const trend = factor.trend || 'stable';
+                const weight = factor.weight || 0;
+                const baseScore = factor.base_score || 0;
+                const adjustedScore = factor.adjusted_score || 0;
+                const weightedScore = factor.weighted_score || 0;
+                const change1m = factor.change_1m || 0;
+                
+                const impactClass = impact === 'positive' ? 'positive' : 'negative';
+                const impactText = impact === 'positive' ? '正向' : '负向';
+                const trendIcon = trend === 'up' ? '↗' : (trend === 'down' ? '↘' : '→');
+                const trendColor = trend === 'up' ? '#00d084' : (trend === 'down' ? '#ff4757' : '#888');
+                const trendText = trend === 'up' ? '上升' : (trend === 'down' ? '下降' : '平稳');
                 
                 card.innerHTML = `
                     <div class="factor-header">
@@ -613,45 +631,47 @@
                             ${name}
                             <span class="impact-tag ${impactClass}">${impactText}</span>
                         </div>
-                        <div class="factor-weight">权重 ${(factor.weight * 100).toFixed(0)}%</div>
+                        <div class="factor-weight">权重 ${(weight * 100).toFixed(0)}%</div>
                     </div>
                     <div class="factor-value">
-                        ${typeof factor.raw_value === 'object' ? 
+                        ${factor.raw_value && typeof factor.raw_value === 'object' ? 
                             `${factor.raw_value.gold_silver || '--'} / ${factor.raw_value.copper_gold || '--'}` : 
-                            factor.raw_value}
+                            (factor.raw_value || '--')}
                     </div>
                     <div class="factor-details">
                         <div class="factor-detail">
                             原始得分
-                            <span>${factor.base_score}</span>
+                            <span>${baseScore.toFixed(2)}</span>
                         </div>
                         <div class="factor-detail">
                             调整后
-                            <span style="color: ${factor.adjusted_score > 5 ? '#00d084' : '#ff4757'}">${factor.adjusted_score}</span>
+                            <span style="color: ${adjustedScore > 5 ? '#00d084' : '#ff4757'}">${adjustedScore.toFixed(2)}</span>
                         </div>
                         <div class="factor-detail">
                             加权得分
-                            <span style="color: #FFD700">${factor.weighted_score}</span>
+                            <span style="color: #FFD700">${weightedScore.toFixed(3)}</span>
                         </div>
                     </div>
                     <div class="progress-bar">
-                        <div class="progress-fill ${factor.adjusted_score > 5 ? 'positive' : 'negative'}" 
-                             style="width: ${factor.adjusted_score * 10}%"></div>
+                        <div class="progress-fill ${adjustedScore > 5 ? 'positive' : 'negative'}" 
+                             style="width: ${Math.min(adjustedScore * 10, 100)}%"></div>
                     </div>
                     <div style="margin-top: 8px; font-size: 12px; color: #666;">
-                        月度变化: <span style="color: ${factor.change_1m > 0 ? '#00d084' : '#ff4757'}">
-                            ${factor.change_1m > 0 ? '+' : ''}${factor.change_1m}
+                        月度变化: <span style="color: ${change1m > 0 ? '#00d084' : '#ff4757'}">
+                            ${change1m > 0 ? '+' : ''}${change1m.toFixed(2)}
                         </span>
-                        <span style="margin-left: 15px; color: ${trendColor}">${trendIcon} ${factor.trend === 'up' ? '上升' : '下降'}</span>
+                        <span style="margin-left: 15px; color: ${trendColor}">${trendIcon} ${trendText}</span>
                     </div>
                 `;
                 grid.appendChild(card);
             }
             
             // 更新预测
-            const pred = data.prediction;
-            document.getElementById('currentPrice').textContent = '¥' + pred.current_price.toLocaleString();
-            document.getElementById('targetPrice').textContent = '¥' + pred.target_price.toLocaleString();
+            const pred = data.prediction || {};
+            const currentPrice = pred.current_price || 0;
+            const targetPrice = pred.target_price || 0;
+            document.getElementById('currentPrice').textContent = '¥' + (currentPrice ? currentPrice.toLocaleString() : '--');
+            document.getElementById('targetPrice').textContent = '¥' + (targetPrice ? targetPrice.toLocaleString() : '--');
             
             // 更新价格来源
             const priceSourceEl = document.getElementById('priceSource');
@@ -663,15 +683,21 @@
             }
             
             const returnEl = document.getElementById('expectedReturn');
-            returnEl.textContent = (pred.expected_return > 0 ? '+' : '') + pred.expected_return + '%';
-            returnEl.style.color = pred.expected_return > 0 ? '#00d084' : '#ff4757';
+            const expectedReturn = pred.expected_return || 0;
+            returnEl.textContent = (expectedReturn > 0 ? '+' : '') + expectedReturn + '%';
+            returnEl.style.color = expectedReturn > 0 ? '#00d084' : '#ff4757';
             
-            const minPrice = Math.min(...pred.predictions);
-            const maxPrice = Math.max(...pred.predictions);
-            document.getElementById('priceRange').textContent = '¥' + minPrice.toFixed(0) + ' - ¥' + maxPrice.toFixed(0);
+            const predictions = pred.predictions || [];
+            let priceRangeText = '--';
+            if (predictions.length > 0) {
+                const minPrice = Math.min(...predictions);
+                const maxPrice = Math.max(...predictions);
+                priceRangeText = '¥' + minPrice.toFixed(0) + ' - ¥' + maxPrice.toFixed(0);
+            }
+            document.getElementById('priceRange').textContent = priceRangeText;
             
             // 绘制图表
-            drawChart(pred.dates, pred.predictions, pred.current_price);
+            drawChart(pred.dates || [], predictions, currentPrice);
         }
 
         function drawChart(dates, predictions, currentPrice) {
@@ -681,9 +707,20 @@
                 chartInstance.destroy();
             }
             
+            // 处理空数据情况
+            if (!dates || dates.length === 0 || !predictions || predictions.length === 0) {
+                console.warn('No data available for chart');
+                return;
+            }
+            
             // 添加当前价格作为起点
-            const allDates = ['当前', ...dates.filter((_, i) => i % 5 === 0)];
-            const allPrices = [currentPrice, ...predictions.filter((_, i) => i % 5 === 0)];
+            // 确保日期和价格数组长度一致
+            const filteredIndices = dates.map((_, i) => i).filter(i => i % 5 === 0);
+            const filteredDates = filteredIndices.map(i => dates[i]);
+            const filteredPrices = filteredIndices.map(i => predictions[i]);
+            
+            const allDates = ['当前', ...filteredDates];
+            const allPrices = [currentPrice, ...filteredPrices];
             
             chartInstance = new Chart(ctx, {
                 type: 'line',

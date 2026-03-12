@@ -1,0 +1,83 @@
+{
+  "timestamp": "2026-03-11T18:17:32.845273",
+  "scenarios": [
+    {
+      "scenario": "基准情景",
+      "composite_score": -0.09522499999999999,
+      "signal": "中性",
+      "adjustment_pct": -1.43,
+      "confidence": 0.753125,
+      "layers": {
+        "china": -0.07999999999999997,
+        "dollar": -0.20241666666666666,
+        "industrial": -0.09000000000000001,
+        "supply": 0.155
+      }
+    },
+    {
+      "scenario": "乐观情景",
+      "composite_score": 0.18744166666666667,
+      "signal": "中性",
+      "adjustment_pct": 2.82,
+      "confidence": 0.753125,
+      "layers": {
+        "china": 0.07250000000000004,
+        "dollar": 0.22091666666666668,
+        "industrial": 0.2766666666666666,
+        "supply": 0.3683333333333333
+      }
+    },
+    {
+      "scenario": "悲观情景",
+      "composite_score": -0.38889166666666664,
+      "signal": "看空",
+      "adjustment_pct": -5.86,
+      "confidence": 0.753125,
+      "layers": {
+        "china": -0.25249999999999995,
+        "dollar": -0.5990833333333333,
+        "industrial": -0.4316666666666666,
+        "supply": -0.2183333333333333
+      }
+    },
+    {
+      "scenario": "中国复苏",
+      "composite_score": 0.05560833333333335,
+      "signal": "中性",
+      "adjustment_pct": 0.84,
+      "confidence": 0.753125,
+      "layers": {
+        "china": 0.29708333333333337,
+        "dollar": -0.20241666666666666,
+        "industrial": -0.09000000000000001,
+        "supply": 0.155
+      }
+    },
+    {
+      "scenario": "美元宽松",
+      "composite_score": 0.019199999999999995,
+      "signal": "中性",
+      "adjustment_pct": 0.29,
+      "confidence": 0.753125,
+      "layers": {
+        "china": -0.07999999999999997,
+        "dollar": 0.17899999999999996,
+        "industrial": -0.09000000000000001,
+        "supply": 0.155
+      }
+    },
+    {
+      "scenario": "供应冲击",
+      "composite_score": -0.058558333333333316,
+      "signal": "中性",
+      "adjustment_pct": -0.88,
+      "confidence": 0.753125,
+      "layers": {
+        "china": -0.07999999999999997,
+        "dollar": -0.20241666666666666,
+        "industrial": -0.09000000000000001,
+        "supply": 0.5216666666666667
+      }
+    }
+  ]
+}
